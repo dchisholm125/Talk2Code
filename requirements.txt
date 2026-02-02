@@ -1,0 +1,5 @@
+faster_whisper
+fastapi 
+uvicorn 
+python-multipart 
+httpx
