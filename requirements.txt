@@ -1,5 +1,2 @@
-faster_whisper
-fastapi 
-uvicorn 
-python-multipart 
-httpx
+python-telegram-bot
+python-dotenv
