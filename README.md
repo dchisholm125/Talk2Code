@@ -4,7 +4,7 @@
 
 You're walking your dog and suddenly realize how to fix that race condition. You're in bed at 2am and need to know if your auth module handles token refresh. You're on the bus wondering "wait, do we even have error handling for that edge case?" 
 
-**You're out with the kids and your production Vue app is suddenly throwing 404 errors to users. Fix it, immediately, without going into the office/server in-person. All you need is this bridge.**
+*** *You're out with the kids and your production Vue app is suddenly throwing 404 errors to users. Fix it, immediately, without going into the office/server in-person. All you need is this bridge.* ***
 
 **Just text your codebase and ask.**
 
