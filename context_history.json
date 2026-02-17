@@ -1,0 +1,125 @@
+{
+  "entries": [
+    {
+      "ts": "2026-02-17T15:43:54",
+      "role": "user",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "what do you think of the strategies in our cobbler bot Implementation? Are we doing ok or do we need to make changes to be profitable?",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T15:43:54",
+      "role": "assistant",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "\u001b[1m\u001b[31merror:\u001b[0m unexpected argument '\u001b[33mYou\u001b[0m' found\r\n\r\n\u001b[1m\u001b[4mUsage:\u001b[0m \u001b[1mcodex exec\u001b[0m [OPTIONS] [PROMPT] [COMMAND]\r\n\r\nFor more information, try '\u001b[1m--help\u001b[0m'.\r\n",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T15:45:09",
+      "role": "user",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "what do you think of the strategies in our cobbler bot Implementation? Are we doing ok or do we need to make changes to be profitable?",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T15:45:09",
+      "role": "assistant",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "\u001b[1m\u001b[31merror:\u001b[0m unexpected argument '\u001b[33mYou\u001b[0m' found\r\n\r\n\u001b[1m\u001b[4mUsage:\u001b[0m \u001b[1mcodex exec\u001b[0m [OPTIONS] [PROMPT] [COMMAND]\r\n\r\nFor more information, try '\u001b[1m--help\u001b[0m'.\r\n",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T15:46:04",
+      "role": "user",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "what do you think of the strategies in our cobbler bot Implementation? Are we doing ok or do we need to make changes to be profitable?",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T15:46:05",
+      "role": "assistant",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "\u001b[1m\u001b[31merror:\u001b[0m unexpected argument '\u001b[33mYou\u001b[0m' found\r\n\r\n\u001b[1m\u001b[4mUsage:\u001b[0m \u001b[1mcodex exec\u001b[0m [OPTIONS] [PROMPT] [COMMAND]\r\n\r\nFor more information, try '\u001b[1m--help\u001b[0m'.\r\n",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T15:49:12",
+      "role": "user",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "what do you think of the strategies in our cobbler bot Implementation? Are we doing ok or do we need to make changes to be profitable?",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T15:49:12",
+      "role": "assistant",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "\u001b[0m\r\n> build · big-pickle\r\n\u001b[0m\r\n\n\u001b[0m✱ \u001b[0mGrep \"cobbler\"\u001b[90m 0 matches\u001b[0m\r\n\u001b[0m✱ \u001b[0mGrep \"Cobbler\"\u001b[90m 0 matches\u001b[0m\r\n\u001b[0m\r\n\u001b[0m$ \u001b[0mls -la /media/dchisholm125/c6810a53-89e3-4ea7-a9d2-d24369408120/repos-local/\r\ntotal 56\r\ndrwxrwxr-x 14 dchisholm125 dchisholm125 4096 Feb 16 08:57 .\r\ndrwxr-xr-x  8 root         root         4096 Feb 11 12:28 ..\r\ndrwxrwxr-x  3 dchisholm125 dchisholm125 4096 Dec 19 09:54 abyss-ui\r\ndrwxrwxr-x  4 dchisholm125 dchisholm125 4096 Feb 11 13:48 boston-hill-fence\r\ndrw",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T16:02:42",
+      "role": "user",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "what do you think of the strategies in our wobbler bot Implementation? Are we doing ok or do we need to make changes to be profitable? Should we add an option to do nothing and hold SOL?",
+      "meta": {
+        "tags": []
+      }
+    },
+    {
+      "ts": "2026-02-17T16:02:42",
+      "role": "assistant",
+      "channel": "/code",
+      "thread_id": "default",
+      "chat_id": 8287834225,
+      "user_id": 8287834225,
+      "content": "opencode run [message..]\r\n\r\nrun opencode with a message\r\n\r\nPositionals:\r\n  message  message to send                                                     [array] [default: []]\r\n\r\nOptions:\r\n  -h, --help        show help                                                              [boolean]\r\n  -v, --version     show version number                                                    [boolean]\r\n      --print-logs  print logs to stderr                                                   [boolean]\r\n      -",
+      "meta": {
+        "tags": []
+      }
+    }
+  ],
+  "summaries": {}
+}
