@@ -4,6 +4,7 @@ from typing import Dict, Optional, List
 from assistants.base import CodingAssistant
 from assistants.opencode import OpenCodeAssistant
 from assistants.gemini import GeminiAssistant
+from assistants.codex import CodexAssistant
 
 logger = logging.getLogger(__name__)
 
@@ -42,3 +43,4 @@ manager = AssistantManager()
 # Default registered assistants
 manager.register(GeminiAssistant(), is_default=True)
 manager.register(OpenCodeAssistant())
+manager.register(CodexAssistant())
