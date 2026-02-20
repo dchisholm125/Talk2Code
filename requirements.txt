@@ -1,2 +1,4 @@
 python-telegram-bot
 python-dotenv
+openai
+huggingface_hub
