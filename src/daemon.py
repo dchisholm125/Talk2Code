@@ -178,6 +178,9 @@ async def _brainstorm_response(window: list[dict], update: Update, context: Cont
                 nonlocal active_msg, active_msg_header, active_msg_body, last_event_type, bubble_start_time, last_tool_name
                 
                 while True:
+                    if cancelled_sessions.get(msg.chat_id):
+                        raise asyncio.CancelledError("User requested stop.")
+
                     line = await stream.readline()
                     if not line:
                         break
@@ -278,6 +281,10 @@ async def _brainstorm_response(window: list[dict], update: Update, context: Cont
                     read_stream_to_buffer(process.stderr, is_stderr=True)
                 )
                 await process.wait()
+            except (asyncio.CancelledError, Exception) as e:
+                process.terminate()
+                cancelled_sessions[msg.chat_id] = False
+                raise e
             finally:
                 timer_task.cancel()
 
@@ -313,11 +320,147 @@ async def _brainstorm_response(window: list[dict], update: Update, context: Cont
         return f"⚠️ LLM error: {e}"
 
 
-async def _compress_to_prompt(window: list[dict], extra: str = "") -> str:
-    """Compress the conversation window into one actionable coding prompt."""
+async def _compress_to_prompt(window: list[dict], update: Update, context: ContextTypes.DEFAULT_TYPE, status_msg, extra: str = "") -> str:
+    """Compress the conversation window into one actionable coding prompt and stream it."""
     assistant = manager.get_default_assistant()
     convo_text = assistant.format_prompt(window, COMPRESS_SYSTEM, extra_context=extra)
-    return await run_assistant(convo_text, agent="plan")
+    
+    while True:
+        cmd = assistant.get_command(convo_text, agent="plan", format_json=True)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=FILE_PATH,
+            )
+
+            output_buffer = ""
+            reasoning_buffer = ""
+            error_output = ""
+            last_edit_time = time.time()
+            last_activity = time.time()
+            
+            active_msg_header = "<b>🧠 Compressing conversation...</b>"
+            active_msg_body = ""
+            bubble_start_time = time.time()
+            
+            async def read_stream_with_timeout(stream, is_stderr=False):
+                nonlocal output_buffer, reasoning_buffer, error_output, last_edit_time, last_activity
+                nonlocal active_msg_header, active_msg_body, bubble_start_time
+                
+                while True:
+                    if cancelled_sessions.get(status_msg.chat_id):
+                        raise asyncio.CancelledError("User requested stop.")
+
+                    try:
+                        line = await asyncio.wait_for(stream.readline(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        if time.time() - last_activity > 45.0:
+                            raise TimeoutError("Assistant process hung for too long.")
+                        continue
+                        
+                    if not line:
+                        break
+                    
+                    last_activity = time.time()
+                    line_decoded = line.decode("utf-8").strip()
+                    if is_stderr:
+                        error_output += line_decoded + "\n"
+                    
+                    event = assistant.parse_line(line_decoded)
+                    if not event:
+                        continue
+
+                    if event.type == StreamEventType.REASONING:
+                        if event.content:
+                            reasoning_buffer += event.content
+                        now = time.time()
+                        if now - last_edit_time > TELEGRAM_EDIT_RATE_LIMIT:
+                            last_edit_time = now
+                            preview = reasoning_buffer[-3800:] if len(reasoning_buffer) > 3800 else reasoning_buffer
+                            active_msg_body = preview
+                            elapsed = int(now - bubble_start_time)
+                            timer_str = f" <i>[Wait: {elapsed}s]</i>" if elapsed >= 30 else ""
+                            escaped_body = html.escape(active_msg_body)
+                            await _edit_with_retry(
+                                context.bot,
+                                chat_id=status_msg.chat_id,
+                                message_id=status_msg.message_id,
+                                text=f"{active_msg_header}{timer_str}\n\n<code>{escaped_body}</code>",
+                                parse_mode=ParseMode.HTML
+                            )
+                    elif event.type == StreamEventType.TEXT:
+                        if event.content:
+                            output_buffer += event.content
+                        now = time.time()
+                        if now - last_edit_time > TELEGRAM_EDIT_RATE_LIMIT:
+                            last_edit_time = now
+                            preview = output_buffer[-3800:] if len(output_buffer) > 3800 else output_buffer
+                            active_msg_body = preview
+                            elapsed = int(now - bubble_start_time)
+                            timer_str = f" <i>[Wait: {elapsed}s]</i>" if elapsed >= 30 else ""
+                            escaped_body = html.escape(active_msg_body)
+                            await _edit_with_retry(
+                                context.bot,
+                                chat_id=status_msg.chat_id,
+                                message_id=status_msg.message_id,
+                                text=f"{active_msg_header}{timer_str}\n\n<code>{escaped_body}</code>",
+                                parse_mode=ParseMode.HTML
+                            )
+
+            async def heartbeat():
+                nonlocal last_edit_time
+                while process.returncode is None:
+                    await asyncio.sleep(5)
+                    now = time.time()
+                    elapsed = int(now - bubble_start_time)
+                    if elapsed >= 30 and now - last_edit_time > 5:
+                        last_edit_time = now
+                        body_block = f"\n\n<code>{html.escape(active_msg_body)}</code>" if active_msg_body else ""
+                        await _edit_with_retry(
+                            context.bot,
+                            chat_id=status_msg.chat_id,
+                            message_id=status_msg.message_id,
+                            text=f"{active_msg_header} <i>[Wait: {elapsed}s]</i>{body_block}",
+                            parse_mode=ParseMode.HTML
+                        )
+
+            timer_task = asyncio.create_task(heartbeat())
+            try:
+                await asyncio.gather(
+                    read_stream_with_timeout(process.stdout, is_stderr=False),
+                    read_stream_with_timeout(process.stderr, is_stderr=True)
+                )
+                await process.wait()
+            except (asyncio.CancelledError, Exception) as e:
+                process.terminate()
+                cancelled_sessions[status_msg.chat_id] = False
+                raise e
+            finally:
+                timer_task.cancel()
+            
+            try:
+                await asyncio.wait_for(process.wait(), timeout=10.0)
+            except asyncio.TimeoutError:
+                 process.terminate()
+
+            if process.returncode != 0:
+                if assistant.is_rate_limit_error(error_output):
+                    if assistant.rotate_model():
+                        logger.warning(f"Retrying compress with rotated model for {assistant.name}")
+                        await _edit_with_retry(
+                            context.bot,
+                            chat_id=status_msg.chat_id,
+                            message_id=status_msg.message_id,
+                            text=f"🔄 Model rotated. Retrying compression..."
+                        )
+                        continue
+            
+            return output_buffer.strip()
+        except Exception as e:
+            logger.error(f"Error compressing: {e}")
+            raise e
 
 
 # ── assistant runner ──────────────────────────────────────────────────────────
@@ -335,7 +478,6 @@ async def run_assistant(prompt: str, assistant: Optional[CodingAssistant] = None
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300,
                 cwd=FILE_PATH,
             )
             
@@ -394,6 +536,8 @@ async def run_assistant_stream(prompt: str, update: Update, context: ContextType
                 nonlocal active_msg, active_msg_header, active_msg_body, last_event_type, bubble_start_time, last_tool_name
                 
                 while True:
+                    if cancelled_sessions.get(status_msg.chat_id):
+                        raise asyncio.CancelledError("User requested stop.")
                     try:
                         line = await asyncio.wait_for(stream.readline(), timeout=5.0)
                     except asyncio.TimeoutError:
@@ -666,6 +810,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"<code>#solo your thoughts</code> — monologue mode; I'll listen silently.\n"
         f"<code>#code [optional focus]</code> — compress this conversation into a "
         f"coding task and hand it off to opencode.\n\n"
+        f"<code>#stop</code> — cancel an ongoing session.\n\n"
         f"/clear — wipe the slate and start a fresh conversation.\n"
         f"/cancel — cancel an ongoing #code session."
     )
@@ -704,6 +849,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     chat_id  = update.message.chat_id
     raw_text = update.message.text.strip()
     lower    = raw_text.lower()
+
+    # ── #stop / #cancel ──────────────────────────────────────────────────────
+    if lower.startswith("#stop") or lower.startswith("#cancel"):
+        cancelled_sessions[chat_id] = True
+        await update.message.reply_text("⛔ Stop requested. Terminating current action...")
+        return
 
     # ── #restart ──────────────────────────────────────────────────────────────
     if lower.startswith("#restart"):
@@ -770,17 +921,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return
 
         status = await update.message.reply_text(
-            "🧠 Compressing conversation into a coding prompt…"
+            "<b>🧠 Compressing conversation into a coding prompt…</b>",
+            parse_mode=ParseMode.HTML
         )
 
         try:
-            coding_prompt = await _compress_to_prompt(window, extra=extra)
-        except Exception as exc:
+            coding_prompt = await _compress_to_prompt(window, update, context, status, extra=extra)
+        except (asyncio.CancelledError, Exception) as exc:
+            text = "⛔ Compression stopped by user." if isinstance(exc, asyncio.CancelledError) else f"❌ Failed to compress conversation: {exc}"
             await _edit_with_retry(
                 context.bot,
                 chat_id=chat_id,
                 message_id=status.message_id,
-                text=f"❌ Failed to compress conversation: {exc}",
+                text=text,
             )
             return
 
@@ -799,8 +952,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             context.bot,
             chat_id=chat_id,
             message_id=status.message_id,
-            text=f"📋 *Prompt sent to {default_ast.name}:*\n\n{preview}\n\n⏳ Running…",
-            parse_mode=ParseMode.MARKDOWN,
+            text=f"<b>📋 Prompt sent to {default_ast.name}:</b>\n\n<pre>{html.escape(preview)}</pre>\n\n⏳ <b>Running…</b>",
+            parse_mode=ParseMode.HTML,
         )
 
         code_window = window

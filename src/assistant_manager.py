@@ -40,5 +40,5 @@ class AssistantManager:
 manager = AssistantManager()
 
 # Default registered assistants
-manager.register(GeminiAssistant(), is_default=True)
-manager.register(OpenCodeAssistant())
+manager.register(GeminiAssistant())
+manager.register(OpenCodeAssistant(), is_default=True)

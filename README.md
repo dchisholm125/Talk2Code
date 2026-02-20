@@ -12,11 +12,12 @@ Talk2Code is a bridge between your phone (via Telegram) and your local dev envir
 
 ---
 
-- **Multi-Assistant Support**: Centralized manager to swap between coding assistants (Gemini, OpenCode, etc.). **Gemini 3 Flash** is now the default.
-- **Model Rotation**: Automatic fallback from Flash to Pro if rate limits or errors (429, 401, 402) are encountered.
-- **Assistant Hashtags**: Direct your prompts to specific assistants using hashtags (e.g., `#gemini <prompt>` or `#opencode <prompt>`).
-- **Real-time Streaming**: See the bot's "thinking" process and tool usage live.
-- **Conversational Bubbles**: Response text is streamed into chat bubbles as it's generated.
+- **Ambient AI Principles**: Optimized for speed, ingenuity, and keeping the human informed. Every long-running process (like compression) is streamed live.
+- **Multi-Assistant Support**: Centralized manager to swap between coding assistants (Gemini, OpenCode, Codex). **OpenCode** (Minimax M2.5) is the current high-speed default.
+- **Low-Latency Architecture**: Designed for "ambient coding" — enabling rapid, small-scale remote fixes from a phone via Telegram.
+- **Model Rotation**: Automatic fallback if rate limits or errors (429, 401, 402) are encountered.
+- **Real-time Streaming**: See the bot's "thinking" process, compression steps, and tool usage live.
+- **Conversational Bubbles**: Response text is streamed into distinct chat bubbles for chronological clarity.
 - **Session Memory**: Accomplishments are summarized and carried forward.
 - **Safety-First Restart**: Built-in syntax check before hot-reloading.
 
@@ -29,6 +30,7 @@ Talk2Code is a bridge between your phone (via Telegram) and your local dev envir
 - **`#code [focus]`**: Synthesize the recent brainstorming into an actionable prompt for the **default** coding assistant.
 - **`#<assistant> [prompt]`**: Route a specific prompt directly to a registered assistant (e.g., `#gemini fix the auth bug`).
 - **`#solo [thoughts]`**: Log your thoughts silently.
+- **`#stop`**: Manually terminate the active assistant or compression session.
 - **`#restart`**: Validates and restarts the daemon.
 - **`/clear`**: Wipes history.
 - **`/cancel`**: Terminates the active assistant run.

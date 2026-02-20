@@ -9,7 +9,7 @@ class OpenCodeAssistant(CodingAssistant):
 
     def get_command(self, prompt: str, agent: str = "coder", model: Optional[str] = None, **kwargs) -> List[str]:
         use_model = model or self.current_model
-        cmd = ["opencode", "run", "--agent", agent, "-m", use_model]
+        cmd = ["opencode", "run", "--agent", agent, "-m", use_model, "--thinking"]
         if kwargs.get("format_json"):
             cmd.extend(["--format", "json"])
         cmd.append(prompt)
