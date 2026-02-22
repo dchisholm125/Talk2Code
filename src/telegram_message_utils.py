@@ -157,3 +157,29 @@ def format_chunk_numbering(chunk: str, current: int, total: int) -> str:
     if current < total:
         return f"{chunk} [{current}/{total}]"
     return chunk
+
+
+def prepare_html_preview(text: str, limit: int = 3500) -> str:
+    """
+    Escape text for HTML and truncate to fit within a Telegram message limit.
+    Ensures we don't break HTML entities during truncation.
+    """
+    import html
+    if not text:
+        return ""
+    
+    escaped = html.escape(text)
+    if len(escaped) <= limit:
+        return escaped
+    
+    # Truncate from the end (since we usually show the tail of the buffer)
+    truncated = escaped[-limit:]
+    
+    # Fix broken entities at the start of the truncation
+    first_semi = truncated.find(";")
+    first_amp = truncated.find("&")
+    
+    if first_semi != -1 and (first_amp == -1 or first_semi < first_amp):
+        truncated = truncated[first_semi + 1:]
+        
+    return "..." + truncated

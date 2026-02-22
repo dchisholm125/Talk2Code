@@ -30,6 +30,7 @@ Talk2Code is a bridge between your phone (via Telegram) and your local dev envir
 - **`#code [focus]`**: Synthesize the recent brainstorming into an actionable prompt for the **default** coding assistant.
 - **`#<assistant> [prompt]`**: Route a specific prompt directly to a registered assistant (e.g., `#gemini fix the auth bug`).
 - **`#solo [thoughts]`**: Log your thoughts silently.
+- **`#model` / `#model #code`**: Switch between the curated plan/build models on the fly (reply with the number from the list).
 - **`#stop`**: Manually terminate the active assistant or compression session.
 - **`#restart`**: Validates and restarts the daemon.
 - **`/clear`**: Wipes history.
@@ -60,6 +61,33 @@ FILE_PATH=/path/to/your/codebase
 ```bash
 ./start_daemon.sh
 ```
+
+---
+
+## ⚙️ Configuration
+- `LOG_LEVEL`: Controls logger verbosity (`INFO` by default).
+- `LOG_PATH`: Location of the rotating log file (`~/.voice-to-code/app.log`).
+- `OBSERVABILITY_HOST` / `OBSERVABILITY_PORT`: Where the FastAPI observability server (progress stream + session detail endpoint) listens.
+- `OPENCODE_PLAN_MODEL` / `OPENCODE_BUILD_MODEL`: Override the assistant used for plan/code agents in OpenCode.
+- `FILE_PATH`: Point this at the repository the assistant is allowed to edit.
+
+> Every session is managed by the backend and persisted under `~/.voice-to-code` (`sessions-state.json` + `event-ledger.jsonl`), so reconnects replay directly from the master narrative log.
+
+## 🧠 Session-Centric Architecture
+1. Each chat maps to a persistent `SessionID` and `SessionState` stored by `SessionManager` in `~/.voice-to-code/sessions-state.json`.
+2. The frontend consumes `/observability/sessions/{session_id}` as the single source of truth for summaries, context envelopes, and working sets.
+3. The `ContextEngine` produces a `ContextEnvelope` (intent, entities, discovery circles, git history, docs, tests, working set) emitted as `ContextSnapshotTaken` so downstream agents always get the full picture.
+4. The event ledger at `~/.voice-to-code/event-ledger.jsonl` captures every heartbeat (`VoiceCaptured`, `IntentExtracted`, `LLM_Thought_Started`, `ToolExecution`, `StateUpdate`, etc.) alongside the "why", enabling warm-start rehydration.
+
+## 🔍 Ambient Discovery
+1. The LLM extracts intent + entities, and the `ContextEngine` expands the search in concentric circles: direct files, functional dependencies, validation suites, and contextual docs/history.
+2. These artifacts build the `ContextEnvelope`, ensuring the assistant never loses sight of the relevant working set.
+3. The frontend renders those envelopes so you always see the live context behind the assistant’s progress.
+
+## 📊 Observability & Recovery
+- FastAPI + SSE expose `/observability/progress` for live frames and `/observability/sessions/{session_id}` for session state plus the logged narrative.
+- The Narrative Log records every decision with explicit reasoning (e.g., "Expanded to `test_auth.py` for validation coverage") so debugging is a single replay kit.
+- If the daemon crashes, `SessionManager` replays the ledger to warm-start the working set and keep the conversation alive.
 
 ---
 
