@@ -104,6 +104,8 @@ class ContextEngine:
         )
         try:
             result = await self.orchestrator.run_assistant(plan_prompt, agent="plan")
+            if not result or not result.strip():
+                raise ValueError("Assistant returned empty intent payload")
             parsed = json.loads(result)
             if isinstance(parsed, dict):
                 return {

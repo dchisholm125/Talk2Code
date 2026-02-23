@@ -31,15 +31,14 @@ from telemetry import get_event_ledger
 
 _logger = get_logger()
 
-# Improvement #2: injected into every coding prompt so the assistant re-reads
-# files after each edit and verifies syntax before finishing.
+# Enhancement: enforce immediate execution in CODE MODE before the assistant starts editing.
 _CODING_VERIFICATION_SUFFIX = (
     "\n\n---\n"
-    "**Verification requirement (mandatory):**\n"
-    "• After every file modification, immediately re-read the changed file to "
-    "confirm the patch applied exactly as intended before proceeding.\n"
-    "• Before finishing the task, run `python -m py_compile <file>` on each "
-    "Python file you modified and fix any syntax errors that are reported."
+    "**AUTONOMOUS CODE MODE (MANDATORY):**\n"
+    "• The user has already fully planned this work. DO NOT ask for clarification, DO NOT wait for additional input, and DO NOT prompt the user for anything.\n"
+    "• Make reasonable assumptions when details are missing, then proceed immediately with the edits.\n"
+    "• After every file modification, immediately re-read the changed file to confirm the patch applied exactly as intended before proceeding.\n"
+    "• Before finishing the task, run `python -m py_compile <file>` on each Python file you modified and fix any reported syntax errors."
 )
 
 
@@ -92,6 +91,8 @@ class OrchestratorService:
             await self._emit(queue, LifecycleEvent(LifecycleStatus.STARTED, "Processing #code request"), session_id)
             await self._emit(queue, StateChanged(current_state, "Capturing conversation window"), session_id)
 
+            _logger.info(f"[#CODE WORKFLOW START] session={session_id} chat={chat_id} text={user_text!r}")
+
             window = session_manager.get_conversation_window(chat_id)
             if not window:
                 message = "💭 Nothing to compress yet — send some context before #code."
@@ -131,6 +132,8 @@ class OrchestratorService:
                 f"Prompt complexity: {complexity_label} (score={float(complexity_score or 0.0):.3f}) "
                 f"ETA={eta_seconds}s"
             )
+            _logger.debug(f"[#CODE COMPRESSED PROMPT length={len(prompt)}]")
+            _logger.info(f"[#CODE COMPRESSED PROMPT EXCERPT] {prompt[:800]}{'...' if len(prompt)>800 else ''}") 
 
             current_state = WorkflowState.CODING
             await self._emit(queue, StateChanged(current_state, "Running the assistant"), session_id)
@@ -156,10 +159,12 @@ class OrchestratorService:
             await self._emit(queue, LifecycleEvent(LifecycleStatus.COMPLETED, "Workflow finished"), session_id)
         except asyncio.CancelledError as exc:
             message = "⛔ Workflow cancelled"
+            _logger.warning(f"[#CODE WORKFLOW CANCELLED] session={session_id} chat={chat_id}: {exc}")
             await self._emit(queue, ProcessingFailed(str(exc), current_state, details=message), session_id)
             await self._emit(queue, LifecycleEvent(LifecycleStatus.FAILED, message), session_id)
         except Exception as exc:  # pragma: no cover - best effort
             message = str(exc)
+            _logger.error(f"[#CODE WORKFLOW ERROR] session={session_id} chat={chat_id}: {exc}", exc_info=True)
             await self._emit(queue, ProcessingFailed(message, current_state), session_id)
             await self._emit(queue, LifecycleEvent(LifecycleStatus.FAILED, message), session_id)
         finally:
@@ -213,6 +218,10 @@ class OrchestratorService:
 
             if event.type == StreamEventType.TOOL_USE:
                 tool_name = (event.metadata or {}).get("name", "tool")
+                tool_input = (event.metadata or {}).get("input", "")
+                _logger.info(f"[WORKFLOW TOOL_USE] tool={tool_name}")
+                if tool_input:
+                    _logger.info(f"[WORKFLOW TOOL_USE INPUT]\n{tool_input}")
                 await self.event_ledger.log_event(
                     session_id,
                     "ToolExecution",
@@ -220,19 +229,35 @@ class OrchestratorService:
                 )
                 if current_stage != WorkflowState.EXECUTING:
                     current_stage = WorkflowState.EXECUTING
+                    _logger.info(f"[WORKFLOW STATE] {WorkflowState.CODING.value} → {WorkflowState.EXECUTING.value}")
                     await self._emit(queue, StateChanged(current_stage, "Executing tool"), session_id)
-            elif event.type in {StreamEventType.TEXT, StreamEventType.REASONING}:
+            elif event.type == StreamEventType.REASONING:
+                if event.content:
+                    _logger.debug(f"[WORKFLOW REASONING] {event.content}")
                 if current_stage != WorkflowState.CODING:
                     current_stage = WorkflowState.CODING
+                    _logger.info(f"[WORKFLOW STATE] → {WorkflowState.CODING.value} (resuming code generation)")
+                    await self._emit(queue, StateChanged(current_stage, "Resuming code generation"), session_id)
+            elif event.type == StreamEventType.TEXT:
+                if event.content:
+                    _logger.debug(f"[WORKFLOW TEXT] {event.content}")
+                if current_stage != WorkflowState.CODING:
+                    current_stage = WorkflowState.CODING
+                    _logger.info(f"[WORKFLOW STATE] → {WorkflowState.CODING.value} (resuming code generation)")
                     await self._emit(queue, StateChanged(current_stage, "Resuming code generation"), session_id)
 
             if event.content:
                 had_content = True
                 await self._emit(queue, ContentDelta(text=event.content, state=current_stage), session_id)
 
-            if event.type == StreamEventType.TOOL_RESULT and current_stage != WorkflowState.CODING:
-                current_stage = WorkflowState.CODING
-                await self._emit(queue, StateChanged(current_stage, "Tool finished"), session_id)
+            if event.type == StreamEventType.TOOL_RESULT:
+                if event.content:
+                    _logger.info(f"[WORKFLOW TOOL_RESULT] from={tool_name if event.type == StreamEventType.TOOL_USE else 'unknown'}")
+                    _logger.debug(f"[WORKFLOW TOOL_RESULT CONTENT]\n{event.content}")
+                if current_stage != WorkflowState.CODING:
+                    current_stage = WorkflowState.CODING
+                    _logger.info(f"[WORKFLOW STATE] → {WorkflowState.CODING.value} (tool finished)")
+                    await self._emit(queue, StateChanged(current_stage, "Tool finished"), session_id)
 
         placeholder = Message(None, session_id, None, "")
         result = await self.streamer.run_streaming(

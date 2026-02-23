@@ -127,24 +127,29 @@ async def handle_start(update: Update, allowed_user_id: Optional[str]) -> None:
 
 async def handle_clear(update: Update, allowed_user_id: Optional[str]) -> None:
     if not is_authorized(update.effective_user.id, allowed_user_id):
+        _logger.warning(f"[AUTH DENIED] /clear from user_id={update.effective_user.id}")
         return
 
     chat_id = update.message.chat_id
+    _logger.info(f"[CMD /clear] chat={chat_id} user={update.effective_user.id}")
     session_manager.clear_conversation(chat_id)
     await update.message.reply_text("🧹 Conversation cleared. Fresh start!")
 
 
 async def handle_cancel(update: Update, allowed_user_id: Optional[str]) -> None:
     if not is_authorized(update.effective_user.id, allowed_user_id):
+        _logger.warning(f"[AUTH DENIED] /cancel from user_id={update.effective_user.id}")
         return
 
     chat_id = update.message.chat_id
+    _logger.info(f"[CMD /cancel] chat={chat_id} user={update.effective_user.id}")
     session_manager.cancel_session(chat_id)
     await update.message.reply_text("⛔ Session cancelled.")
 
 
 async def handle_restart(update: Update, context: Any, status_msg) -> None:
     chat_id = update.message.chat_id
+    _logger.info(f"[CMD #restart] chat={chat_id} — running syntax check")
     
     await _edit_with_retry(
         context.bot,
@@ -162,6 +167,7 @@ async def handle_restart(update: Update, context: Any, status_msg) -> None:
     
     if error_files:
         error_list = "\n".join(error_files)
+        _logger.error(f"[#restart] chat={chat_id}: syntax errors found:\n{error_list}")
         await _edit_with_retry(
             context.bot,
             chat_id=chat_id,
@@ -169,6 +175,8 @@ async def handle_restart(update: Update, context: Any, status_msg) -> None:
             text=f"❌ Restart aborted! Syntax errors detected:\n\n{error_list}"
         )
         return
+
+    _logger.info(f"[#restart] chat={chat_id}: syntax clean, exec-ing new process")
 
     await _edit_with_retry(
         context.bot,
@@ -190,4 +198,4 @@ async def handle_solo(chat_id: int, content: str) -> None:
 
 async def handle_stop(chat_id: int) -> None:
     session_manager.cancel_session(chat_id)
-    _logger.info(f"Stop requested for chat {chat_id}")
+    _logger.info(f"[CMD #stop] chat={chat_id}: session cancellation requested")

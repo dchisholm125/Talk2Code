@@ -2,6 +2,8 @@ python-telegram-bot
 python-dotenv
 openai
 huggingface_hub
-fastapi
-uvicorn
-sse-starlette
+fastapi>=0.100.0
+uvicorn>=0.20.0
+sse-starlette>=1.6.0
+# Pin pydantic >=2.10 to satisfy vllm compatibility
+pydantic>=2.10

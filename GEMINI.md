@@ -1,3 +1,5 @@
+From Derek (repository owner) directly: Our mantra is: expose all failures ASAP, fail fast, and control reliability with test harnesses. When we move forward we do NOT regress!
+
 # Guiding Principles for Ambient AI Development
 
 This document outlines the core tenets of the Talk2Code / voice-to-code project. These principles ensure the tool remains effective for its primary use case: **remote, high-pressure, mobile-first codebase management.**

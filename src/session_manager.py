@@ -8,10 +8,8 @@ from typing import Any, Dict, List, Optional
 
 from core.events import ContextEnvelope, SessionID
 from logger import get_logger
-from session_repository import JsonSessionRepository, SessionRepository
 from telemetry import get_event_ledger
 
-SESSION_HISTORY_PATH = Path.home() / ".voice-to-code" / "session-history.json"
 SESSION_STATE_PATH = Path.home() / ".voice-to-code" / "sessions-state.json"
 
 _logger = get_logger()
@@ -29,6 +27,7 @@ class SessionState:
     working_set: List[str] = field(default_factory=list)
     pending_question: Optional[str] = None
     cancelled: bool = False
+    consecutive_empty_responses: int = 0
 
     def touch(self) -> None:
         self.last_active = datetime.utcnow().isoformat()
@@ -45,6 +44,7 @@ class SessionState:
             "working_set": self.working_set,
             "pending_question": self.pending_question,
             "cancelled": self.cancelled,
+            "consecutive_empty_responses": self.consecutive_empty_responses,
         }
 
     @classmethod
@@ -60,12 +60,12 @@ class SessionState:
             working_set=data.get("working_set", []),
             pending_question=data.get("pending_question"),
             cancelled=data.get("cancelled", False),
+            consecutive_empty_responses=data.get("consecutive_empty_responses", 0),
         )
 
 
 class SessionManager:
-    def __init__(self, repository: Optional[SessionRepository] = None) -> None:
-        self.repository = repository or JsonSessionRepository(SESSION_HISTORY_PATH)
+    def __init__(self) -> None:
         self.event_ledger = get_event_ledger()
         self.state_path = SESSION_STATE_PATH
         self.sessions: Dict[SessionID, SessionState] = self._load_session_states()
@@ -152,6 +152,12 @@ class SessionManager:
 
     def add_message(self, chat_id: int, role: str, content: str, solo: bool = False) -> None:
         state = self.get_or_create_session(chat_id)
+        last_entry = state.history[-1] if state.history else None
+        if last_entry and last_entry.get("role") == role and last_entry.get("content") == content and last_entry.get("solo") == solo:
+            _logger.debug(
+                f"Skipping duplicate message for chat {chat_id}: role={role} content={content[:40]}"
+            )
+            return
         state.history.append({"role": role, "content": content, "solo": solo})
         state.touch()
         self._persist_state(state)
@@ -196,26 +202,10 @@ class SessionManager:
 
     # ── Session history / narrative ─────────────────────────────────────────
 
-    def get_session_history(self) -> List[Dict[str, Any]]:
-        return self.repository.load_sessions()
-
-    def add_session_summary(self, summary: str) -> None:
-        sessions = self.repository.load_sessions()
-        sessions.append({
-            "timestamp": datetime.utcnow().isoformat(),
-            "summary": summary,
-        })
-        self.repository.save_sessions(sessions)
-
-    def format_session_history_for_prompt(
+    def format_current_context_for_prompt(
         self, session_id: Optional[SessionID] = None
     ) -> str:
-        sessions = self.get_session_history()
         lines = []
-        if sessions:
-            lines.append("Previous sessions:")
-            for i, session in enumerate(sessions, 1):
-                lines.append(f"{i}. {session['summary']}")
         if session_id:
             state = self.sessions.get(session_id)
             summary_text = state.context_envelope.get("summary_text") if state else ""
@@ -265,6 +255,31 @@ class SessionManager:
 
     def clear_pending_model_selection(self, chat_id: int) -> None:
         self.pending_model_selections.pop(chat_id, None)
+
+    # ── Loop detection ────────────────────────────────────────────────────────
+
+    def record_empty_response(self, chat_id: int) -> bool:
+        state = self.get_or_create_session(chat_id)
+        state.consecutive_empty_responses += 1
+        state.touch()
+        self._persist_state(state)
+        if state.consecutive_empty_responses >= 2:
+            _logger.error(
+                f"LOOP DETECTED: {state.consecutive_empty_responses} consecutive empty "
+                f"responses for chat {chat_id}. Killing bot to prevent infinite loop."
+            )
+            return True
+        return False
+
+    def reset_empty_response_counter(self, chat_id: int) -> None:
+        state = self.get_or_create_session(chat_id)
+        state.consecutive_empty_responses = 0
+        state.touch()
+        self._persist_state(state)
+
+    def check_loop_detected(self, chat_id: int) -> bool:
+        state = self.get_or_create_session(chat_id)
+        return state.consecutive_empty_responses >= 2
 
 
 session_manager = SessionManager()

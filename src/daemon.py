@@ -11,6 +11,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.constants import ParseMode
+from telegram.error import NetworkError
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
 
@@ -63,6 +64,7 @@ brainstorm_service = BrainstormService(FILE_PATH, TELEGRAM_EDIT_RATE_LIMIT)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.effective_user:
+        _logger.debug("[MSG] Received update with no message or user — skipping")
         return
 
     user = update.effective_user
@@ -70,16 +72,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     msg_id = update.message.message_id
     raw_text = (update.message.text or "").strip()
 
+    # ── Full inbound message log ──────────────────────────────────
+    _logger.info(
+        f"[MSG IN] chat={chat_id} msg_id={msg_id} "
+        f"user={user.username or user.first_name!r} (id={user.id}) "
+        f"text={raw_text!r}"
+    )
+
     if not raw_text:
+        _logger.debug(f"[MSG] Empty message from user {user.id} — skipping")
         return
 
     if not is_authorized(user.id, ALLOWED_USER_ID):
-        _logger.warning(f"Unauthorized attempt from {user.id}")
+        _logger.warning(f"[AUTH DENIED] user_id={user.id} username={user.username!r} chat={chat_id}")
         await update.message.reply_text("Unauthorized. Contact the owner to add you.")
         return
 
     if msg_id in _processed_message_ids:
-        _logger.debug(f"Skipping duplicate message {msg_id}")
+        _logger.debug(f"[MSG DUPLICATE] msg_id={msg_id} already processed — skipping")
         return
     _processed_message_ids.add(msg_id)
 
@@ -94,22 +104,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     pending_mode = session_manager.get_pending_model_selection(chat_id)
     if pending_mode:
+        _logger.info(f"[ROUTE] chat={chat_id} → model_selection (pending_mode={pending_mode}) choice={raw_text!r}")
         await _apply_model_selection(chat_id, pending_mode, raw_text, update, context)
         return
 
     if lower == "#model" or lower == "#model #code":
         mode = "build" if lower == "#model #code" else "plan"
+        _logger.info(f"[ROUTE] chat={chat_id} → #model mode={mode}")
         session_manager.set_pending_model_selection(chat_id, mode)
         await update.message.reply_text(_build_model_list_message(mode), parse_mode=ParseMode.HTML)
         return
 
     if lower.startswith("#stop") or lower.startswith("#cancel"):
+        _logger.info(f"[ROUTE] chat={chat_id} → #stop/#cancel text={raw_text!r}")
         await handle_stop(chat_id)
         _logger.info(f"[TO-USER] chat={chat_id}: ⛔ Stop requested.")
         await update.message.reply_text("⛔ Stop requested. Terminating current action...")
         return
 
     if lower.startswith("#restart"):
+        _logger.info(f"[ROUTE] chat={chat_id} → #restart")
         _logger.info(f"[TO-USER] chat={chat_id}: 🔍 Restart requested.")
         status_msg = await update.message.reply_text("🔍 Checking for syntax errors before restart...")
         await handle_restart(update, context, status_msg)
@@ -117,30 +131,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if lower.startswith("#solo"):
         content = raw_text[5:].strip()
+        _logger.info(f"[ROUTE] chat={chat_id} → #solo content={content!r}")
         if not content:
+            _logger.warning(f"[ROUTE] chat={chat_id} → #solo with no content — ignoring")
             return
         await handle_solo(chat_id, content)
         return
 
     if lower.startswith("#code"):
-        _logger.info(f"Intent detected: #code (chat {chat_id})")
         extra = raw_text[5:].strip()
+        _logger.info(f"[ROUTE] chat={chat_id} → #code extra_hint={extra!r} full_text={raw_text!r}")
         try:
             await assistant_service.handle_code_intent(incoming, delivery, extra)
         except Exception as exc:
-            _logger.error(f"#code intent failed: {exc}", exc_info=True)
+            _logger.error(f"[#CODE FAILED] chat={chat_id}: {exc}", exc_info=True)
             await delivery.send_message(Message(None, chat_id, None, f"⚠️ Error running #code: {exc}"))
         return
 
     if lower.startswith("#prompt"):
-        _logger.info(f"Intent detected: #prompt (chat {chat_id})")
+        _logger.info(f"[ROUTE] chat={chat_id} → #prompt")
         prompt_body = raw_text[7:].strip()
         if not prompt_body:
+            _logger.warning(f"[#PROMPT] chat={chat_id}: received #prompt with no body")
             await delivery.send_message(Message(None, chat_id, None, "Please include a prompt after #prompt."))
             return
 
         pending_question = session_manager.get_pending_question(chat_id)
         if pending_question:
+            _logger.info(f"[#PROMPT] chat={chat_id}: injecting pending question: {pending_question!r}")
             prompt_body = (
                 f"[Context: The assistant previously asked: \"{pending_question}\"]\n\n"
                 f"User response: {prompt_body}"
@@ -148,36 +166,46 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             session_manager.clear_pending_question(chat_id)
             _logger.info(f"[CONTEXT] chat={chat_id}: included pending question in prompt")
 
+        _logger.info(f"[#PROMPT] chat={chat_id}: prompt_body={prompt_body!r}")
         try:
             await assistant_service.handle_prompt_intent(incoming, prompt_body, delivery)
         except Exception as exc:
-            _logger.error(f"#prompt intent failed: {exc}", exc_info=True)
+            _logger.error(f"[#PROMPT FAILED] chat={chat_id}: {exc}", exc_info=True)
             await delivery.send_message(Message(None, chat_id, None, f"⚠️ Error running prompt: {exc}"))
         return
 
     if lower.startswith("#") and not lower.startswith("#solo"):
         tag = lower.split()[0][1:]
+        _logger.info(f"[ROUTE] chat={chat_id} → generic assistant tag=#{tag}")
         if tag:
             ast = manager.get_assistant(tag)
             if ast:
-                prompt = raw_text[len(tag) + 1 :].strip()
+                prompt = raw_text[len(tag) + 1:].strip()
+                _logger.info(f"[#{tag.upper()}] chat={chat_id} assistant={ast.name} prompt={prompt!r}")
                 if not prompt:
+                    _logger.warning(f"[#{tag.upper()}] chat={chat_id}: no prompt body provided")
                     await update.message.reply_text(f"Please provide a prompt for #{tag}.")
                     return
                 status = await update.message.reply_text(f"🚀 Routing to {ast.name}...")
                 status_msg = Message(None, chat_id, status.message_id, status.text or "")
                 stream_orchestrator = StreamOrchestrator(FILE_PATH, TELEGRAM_EDIT_RATE_LIMIT)
-                await stream_orchestrator.run_streaming(prompt, status_msg, assistant=ast)
+                try:
+                    await stream_orchestrator.run_streaming(prompt, status_msg, assistant=ast)
+                except Exception as exc:
+                    _logger.error(f"[#{tag.upper()} FAILED] chat={chat_id}: {exc}", exc_info=True)
+                    await delivery.send_message(Message(None, chat_id, None, f"⚠️ Error routing to #{tag}: {exc}"))
                 return
+            else:
+                _logger.warning(f"[ROUTE] chat={chat_id}: unknown tag #{tag} — falling through to brainstorm")
 
-    _logger.info(f"Brainstorm intent (chat={chat_id}): {raw_text[:200]}")
+    _logger.info(f"[ROUTE] chat={chat_id} → brainstorm text={raw_text!r}")
     session_state = session_manager.get_or_create_session(chat_id)
     session_manager.add_message(chat_id, "user", raw_text, solo=False)
     event_stream = brainstorm_service.stream_brainstorm(session_state.session_id, chat_id, incoming)
     try:
         await delivery.consume_domain_events(event_stream, incoming)
     except Exception as exc:
-        _logger.error(f"Brainstorm failed: {exc}", exc_info=True)
+        _logger.error(f"[BRAINSTORM FAILED] chat={chat_id}: {exc}", exc_info=True)
         await delivery.send_message(Message(None, chat_id, None, f"⚠️ Brainstorm error: {exc}"))
 
 
@@ -253,9 +281,23 @@ async def _apply_model_selection(chat_id: int, mode: str, choice: str, update, c
 
 
 async def _start_observability(application: Application) -> None:
-    task = asyncio.create_task(start_observability_server(host=OBSERVABILITY_HOST, port=OBSERVABILITY_PORT))
+    def _on_obs_done(task: asyncio.Task) -> None:
+        """Prevent 'Task exception was never retrieved' if the server fails to bind."""
+        exc = task.exception() if not task.cancelled() else None
+        if exc is not None:
+            _logger.error(
+                f"[OBSERVABILITY] Server task ended with exception: {exc!r} "
+                "— bot continues without observability HTTP endpoint."
+            )
+
+    task = asyncio.create_task(
+        start_observability_server(host=OBSERVABILITY_HOST, port=OBSERVABILITY_PORT)
+    )
+    task.add_done_callback(_on_obs_done)
     application.bot_data["observability_task"] = task
-    _logger.info(f"Observability stream available at http://{OBSERVABILITY_HOST}:{OBSERVABILITY_PORT}/observability/progress")
+    _logger.info(
+        f"[OBSERVABILITY] Starting on http://{OBSERVABILITY_HOST}:{OBSERVABILITY_PORT}/observability/progress"
+    )
 
 
 async def _stop_observability(application: Application) -> None:
@@ -267,10 +309,15 @@ async def _stop_observability(application: Application) -> None:
 
 
 def _print_startup_banner() -> None:
-    banner = """
+    banner = f"""
 ╔══════════════════════════════════════════════════╗
 ║                VOICE-TO-CODE                      ║
 ║            Telegram Coding Assistant               ║
+╠══════════════════════════════════════════════════╣
+║  FILE_PATH  : {FILE_PATH:<35} ║
+║  LOG_LEVEL  : {os.getenv('LOG_LEVEL', 'INFO'):<35} ║
+║  VERBOSE    : {os.getenv('VERBOSE_LOGGING', 'false'):<35} ║
+║  OBS HOST   : {OBSERVABILITY_HOST}:{OBSERVABILITY_PORT:<28} ║
 ╚══════════════════════════════════════════════════╝
 """
     print(banner)
@@ -340,7 +387,17 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     _logger.info("Bot running and polling for updates")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    try:
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
+    except NetworkError as exc:
+        _logger.error(
+            "Telegram network initialization failed — check connectivity and proxy settings",
+            exc_info=exc,
+        )
+        print("ERROR: Unable to reach Telegram API. Check your network or proxy configuration.")
+    except Exception as exc:  # pragma: no cover - fatal startup failure
+        _logger.error("Unhandled error while running bot", exc_info=exc)
+        raise
 
 
 if __name__ == "__main__":

@@ -9,7 +9,13 @@ import subprocess
 from dataclasses import asdict
 from typing import List, Tuple
 
-from core.events import SessionID
+from core.events import (
+    SessionID,
+    LifecycleEvent,
+    LifecycleStatus,
+    StateChanged,
+    WorkflowState,
+)
 from core.interfaces import DeliveryInterface
 from core.message import Message
 from context_engine import ContextEngine
@@ -54,8 +60,14 @@ class AssistantService:
         self, message: Message, delivery: DeliveryInterface, extra: str = ""
     ) -> None:
         """Run the full #code workflow then emit a post-workflow session report."""
+
         state = session_manager.get_or_create_session(message.chat_id)
         session_id = state.session_id
+
+        _logger.info(
+            f"[ASSISTANT SERVICE #code] chat={message.chat_id} session={session_id} "
+            f"extra={extra!r} text={message.text!r}"
+        )
 
         await self.event_ledger.log_event(
             session_id,
@@ -68,45 +80,65 @@ class AssistantService:
             },
         )
 
-        try:
-            envelope, reason = await self.context_engine.build_context_envelope(
-                session_id, message.text
+        async def _run_workflow():
+            yield LifecycleEvent(
+                LifecycleStatus.STARTED,
+                "🧠 Processing your #code request..."
             )
-            session_manager.update_context_envelope(session_id, envelope)
-            await self.event_ledger.log_event(
-                session_id,
-                "IntentExtracted",
-                payload={
-                    "summary": envelope.intent_summary,
-                    "entities": envelope.entities,
-                },
-                reason="LLM digested the request into intent and entities",
+            yield StateChanged(
+                WorkflowState.TRANSCRIBING,
+                "Analyzing intent and preparing a tailored prompt"
             )
-            envelope_dict = asdict(envelope)
-            await self.event_ledger.log_event(
-                session_id,
-                "ContextSnapshotTaken",
-                payload={"envelope": envelope_dict},
-                reason=reason,
-            )
-        except Exception as exc:
-            _logger.warning("Context discovery failed", exc_info=exc)
 
-        context_summary = session_manager.context_summary_for_prompt(session_id)
-        extra_parts: List[str] = []
-        if extra:
-            extra_parts.append(extra)
-        if context_summary:
-            extra_parts.append(context_summary)
-        combined_extra = "\n\n".join(extra_parts)
+            try:
+                _logger.info(f"[#CODE CONTEXT] session={session_id}: building context envelope")
+                envelope, reason = await self.context_engine.build_context_envelope(
+                    session_id, message.text
+                )
+                _logger.info(
+                    f"[#CODE CONTEXT] intent_summary={envelope.intent_summary!r} "
+                    f"entities={envelope.entities} reason={reason!r}"
+                )
+                session_manager.update_context_envelope(session_id, envelope)
+                await self.event_ledger.log_event(
+                    session_id,
+                    "IntentExtracted",
+                    payload={
+                        "summary": envelope.intent_summary,
+                        "entities": envelope.entities,
+                    },
+                    reason="LLM digested the request into intent and entities",
+                )
+                envelope_dict = asdict(envelope)
+                await self.event_ledger.log_event(
+                    session_id,
+                    "ContextSnapshotTaken",
+                    payload={"envelope": envelope_dict},
+                    reason=reason,
+                )
+            except Exception as exc:
+                _logger.warning(f"[#CODE CONTEXT FAILED] session={session_id}: {exc}", exc_info=True)
 
-        event_stream = self.orchestrator.stream_code_workflow(
-            session_id,
-            message.chat_id,
-            message.text,
-            extra=combined_extra,
-        )
-        await delivery.consume_domain_events(event_stream, message)
+            context_summary = session_manager.context_summary_for_prompt(session_id)
+            _logger.info(f"[#CODE CONTEXT SUMMARY] length={len(context_summary)} combined_extra_parts: extra={bool(extra)}, context_summary={bool(context_summary)}")
+            extra_parts: List[str] = []
+            if extra:
+                extra_parts.append(extra)
+            if context_summary:
+                extra_parts.append(context_summary)
+            combined_extra = "\n\n".join(extra_parts)
+
+            async for event in self.orchestrator.stream_code_workflow(
+                session_id,
+                message.chat_id,
+                message.text,
+                extra=combined_extra,
+            ):
+                if isinstance(event, LifecycleEvent) and event.status == LifecycleStatus.STARTED:
+                    continue
+                yield event
+
+        await delivery.consume_domain_events(_run_workflow(), message)
 
         await self._post_workflow_report(message, delivery)
 
@@ -137,9 +169,13 @@ class AssistantService:
             git_stat, changed_py, untracked_py = await asyncio.to_thread(
                 self._collect_changes
             )
+            _logger.info(
+                f"[POST-WORKFLOW] changed_py={changed_py} untracked_py={untracked_py}"
+            )
             syntax_errors = await asyncio.to_thread(
                 self._check_syntax, changed_py + untracked_py
             )
+            _logger.info(f"[POST-WORKFLOW] syntax_errors={syntax_errors}")
             report = self._format_report(git_stat, syntax_errors)
             _logger.info(f"[POST-WORKFLOW] chat={message.chat_id}: session report ready, errors={len(syntax_errors)}")
         except Exception as exc:

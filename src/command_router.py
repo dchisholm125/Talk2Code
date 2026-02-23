@@ -284,7 +284,7 @@ class CommandExecutor:
         token_count = 0
         
         assistant = manager.get_default_assistant()
-        extra = session_manager.format_session_history_for_prompt()
+        extra = session_manager.format_current_context_for_prompt()
         prompt_val = assistant.format_prompt(window, BRAINSTORM_SYSTEM, extra_context=extra)
         
         cmd = assistant.get_command(prompt_val, agent="plan", format_json=True)

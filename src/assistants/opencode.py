@@ -29,8 +29,8 @@ AVAILABLE_MODELS: List[tuple] = [
     ("GPT-5 Nano (free)         [opencode]", "opencode/gpt-5-nano"),
 ]
 
-_DEFAULT_PLAN_MODEL  = "google/gemini-3-flash-preview"
-_DEFAULT_BUILD_MODEL = "openai/gpt-5.1-codex-mini"
+_DEFAULT_PLAN_MODEL  = "opencode/minimax-m2.5-free" # this is unique to the computer this repo is on!
+_DEFAULT_BUILD_MODEL = "openai/gpt-5.1-codex-mini" # this is unique to the computer this repo is on!
 
 
 def _update_env_key(env_path: Path, key: str, value: str) -> None:

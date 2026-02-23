@@ -73,9 +73,11 @@ class BrainstormService:
         await self._emit(queue, LifecycleEvent(LifecycleStatus.STARTED, "Starting brainstorm"))
         await self._emit(queue, StateChanged(current_state, "Brainstorming with the assistant"))
 
+        _logger.info(f"[BRAINSTORM START] session={session_id} chat={chat_id} text={request.text!r}")
+
         window = session_manager.get_conversation_window(chat_id)
         assistant = manager.get_default_assistant()
-        extra = session_manager.format_session_history_for_prompt(session_id)
+        extra = session_manager.format_current_context_for_prompt(session_id)
 
         prompt = assistant.format_prompt(window, BRAINSTORM_SYSTEM, extra_context=extra)
         placeholder = Message(None, session_id, None, "")
@@ -103,10 +105,13 @@ class BrainstormService:
             )
 
             if result.output:
+                _logger.info(f"[BRAINSTORM OUTPUT length={len(result.output)}]")
+                _logger.debug(f"[BRAINSTORM OUTPUT CONTENT]\n{result.output}")
                 await self._emit(queue, ContentDelta(text=result.output, state=current_state))
                 session_manager.add_message(chat_id, "assistant", result.output, solo=False)
 
             if result.question:
+                _logger.info(f"[BRAINSTORM QUESTION DETECTED] {result.question!r}")
                 session_manager.set_pending_question(session_id, result.question)
                 await self._emit(
                     queue,
@@ -117,10 +122,11 @@ class BrainstormService:
                     ),
                 )
 
+            _logger.info(f"[BRAINSTORM COMPLETE] session={session_id} chat={chat_id}")
             await self._emit(queue, LifecycleEvent(LifecycleStatus.COMPLETED, "Brainstorm complete"))
         except Exception as exc:
             message = str(exc)
-            _logger.log_exception("Brainstorm error", exc_info=exc)
+            _logger.error(f"[BRAINSTORM ERROR] session={session_id} chat={chat_id}: {exc}", exc_info=True)
             await self._emit(queue, ProcessingFailed(message, current_state, details=message))
             await self._emit(queue, LifecycleEvent(LifecycleStatus.FAILED, message))
         finally:

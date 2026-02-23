@@ -101,6 +101,51 @@ async def session_details(session_id: int) -> JSONResponse:
 async def start_observability_server(
     host: str = OBSERVABILITY_HOST, port: int = OBSERVABILITY_PORT
 ) -> None:
-    config = Config(app=app, host=host, port=port, loop="asyncio", lifespan="on")
-    server = Server(config=config)
-    await server.serve()
+    import logging as _logging
+    import socket
+
+    _obs_logger = _logging.getLogger("voice-to-code")
+
+    # Try the configured port, then up to 3 alternates, so a stale daemon
+    # never prevents the new one from serving observability data.
+    bound_port: int | None = None
+    for attempt_port in range(port, port + 4):
+        try:
+            # Probe the port before handing it to uvicorn; this gives us a
+            # clean OSError instead of a fatal sys.exit(1) from uvicorn.
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                probe.bind((host, attempt_port))
+            bound_port = attempt_port
+            break
+        except OSError:
+            _obs_logger.warning(
+                f"[OBSERVABILITY] Port {attempt_port} is in use, trying next..."
+            )
+
+    if bound_port is None:
+        _obs_logger.error(
+            f"[OBSERVABILITY] Could not bind on ports {port}–{port + 3}. "
+            "Observability HTTP server will NOT start. The bot continues normally."
+        )
+        return
+
+    if bound_port != port:
+        _obs_logger.warning(
+            f"[OBSERVABILITY] Configured port {port} busy; using {bound_port} instead."
+        )
+
+    _obs_logger.info(f"[OBSERVABILITY] Starting server on {host}:{bound_port}")
+    try:
+        config = Config(app=app, host=host, port=bound_port, loop="asyncio", lifespan="on")
+        server = Server(config=config)
+        await server.serve()
+    except SystemExit as exc:
+        # Uvicorn calls sys.exit(1) on startup failures — absorb it so the
+        # unhandled task exception never corrupts the bot's event loop.
+        _obs_logger.error(
+            f"[OBSERVABILITY] Server exited with code {exc.code}. "
+            "Observability disabled for this session."
+        )
+    except Exception as exc:
+        _obs_logger.error(f"[OBSERVABILITY] Unexpected server error: {exc}", exc_info=True)

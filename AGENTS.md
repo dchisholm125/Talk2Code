@@ -1,0 +1,1 @@
+Our mantra is: expose all failures ASAP, fail fast, and control reliability with test harnesses. When we move forward we do NOT regress!

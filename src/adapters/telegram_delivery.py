@@ -128,13 +128,17 @@ class TelegramDeliveryAdapter(DeliveryInterface):
         reply_to_id = request.reply_to_id or request.message_id
 
         async for event in event_stream:
+            _logger.debug(f"[DELIVERY EVENT] type={type(event).__name__} chat={request.chat_id}")
+
             if isinstance(event, LifecycleEvent):
+                _logger.info(f"[DELIVERY LIFECYCLE] status={event.status.value} msg={event.message!r}")
                 if event.status == LifecycleStatus.STARTED:
                     header = event.message or "🧠 Preparing your #code request..."
                     status = await self.send_message(
                         Message(None, request.chat_id, None, header, reply_to_id=request.message_id)
                     )
                     status_message_id = status.message_id
+                    _logger.info(f"[DELIVERY] status bubble created: msg_id={status_message_id}")
                 elif event.status == LifecycleStatus.COMPLETED and status_message_id is not None:
                     await self.edit_message(
                         request.chat_id,
@@ -142,6 +146,7 @@ class TelegramDeliveryAdapter(DeliveryInterface):
                         event.message or "✅ Workflow finished.",
                     )
                 elif event.status == LifecycleStatus.FAILED:
+                    _logger.error(f"[DELIVERY LIFECYCLE FAILED] chat={request.chat_id} msg={event.message!r}")
                     if status_message_id is not None:
                         with contextlib.suppress(Exception):
                             await self.edit_message(
@@ -161,6 +166,7 @@ class TelegramDeliveryAdapter(DeliveryInterface):
                 failure_reported = True
                 stage_label = _state_banner(event.stage)
                 error_text = f"⚠️ {stage_label}: {event.error}"
+                _logger.error(f"[DELIVERY PROCESSING_FAILED] chat={request.chat_id} stage={event.stage} error={event.error!r}")
                 if status_message_id is not None:
                     await self.edit_message(request.chat_id, status_message_id, error_text)
                 await self.send_message(
@@ -168,6 +174,7 @@ class TelegramDeliveryAdapter(DeliveryInterface):
                 )
 
             elif isinstance(event, StateChanged) and status_message_id is not None:
+                _logger.info(f"[DELIVERY STATE_CHANGED] chat={request.chat_id} state={event.state.value} details={event.details!r}")
                 with contextlib.suppress(Exception):
                     await self.edit_message(
                         request.chat_id,
@@ -178,12 +185,16 @@ class TelegramDeliveryAdapter(DeliveryInterface):
             elif isinstance(event, ProgressUpdate) and status_message_id is not None:
                 with contextlib.suppress(Exception):
                     payload = _build_progress_payload(event)
+                    _logger.debug(f"[DELIVERY PROGRESS] chat={request.chat_id} stage={event.stage.value} header={payload.header!r}")
                     await self.update_progress_status(request.chat_id, status_message_id, payload)
 
             elif isinstance(event, ContentDelta):
+                _logger.info(f"[DELIVERY CONTENT_DELTA] chat={request.chat_id} length={len(event.text)} state={event.state.value}")
+                _logger.debug(f"[DELIVERY CONTENT_DELTA TEXT] {event.text}")
                 reply_to_id = await _send_content_chunks(event.text, request, self, reply_to_id)
 
             elif isinstance(event, TaskInteraction):
+                _logger.info(f"[DELIVERY TASK_INTERACTION] chat={request.chat_id} question={event.question!r}")
                 question_text = (
                     event.metadata.get("prompt") if event.metadata else event.question
                 ) or event.question
@@ -192,10 +203,14 @@ class TelegramDeliveryAdapter(DeliveryInterface):
                         None,
                         request.chat_id,
                         None,
-                        f"💬 The assistant asked: \"{question_text}\"\nReply with #prompt to continue.",
+                        f'💬 The assistant asked: "{question_text}"\nReply with #prompt to continue.',
                         reply_to_id=request.message_id,
                     )
                 )
+
+            else:
+                _logger.debug(f"[DELIVERY UNHANDLED EVENT] type={type(event).__name__} chat={request.chat_id} — no handler registered")
+
 
 
 _STATE_LABELS: dict[WorkflowState, str] = {

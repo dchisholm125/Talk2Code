@@ -163,7 +163,12 @@ class LLMOrchestrator:
 
                         if is_stderr:
                             error_output += line_decoded + "\n"
+                            if line_decoded:
+                                _logger.warning(f"[OPENCODE COMPRESS STDERR] {line_decoded}")
                             continue
+
+                        if line_decoded:
+                            _logger.debug(f"[OPENCODE COMPRESS RAW] {line_decoded}")
 
                         event = assistant.parse_line(line_decoded)
                         if not event:
@@ -172,7 +177,7 @@ class LLMOrchestrator:
                         if event.type == StreamEventType.REASONING:
                             if event.content:
                                 reasoning_buffer += event.content
-                                _logger.log_token_progress(len(reasoning_buffer), "compressing")
+                                _logger.debug(f"[OPENCODE COMPRESS THINKING] {event.content}")
                             now = time.time()
                             if now - last_edit_time > self.edit_rate_limit:
                                 last_edit_time = now
@@ -180,7 +185,7 @@ class LLMOrchestrator:
                         elif event.type == StreamEventType.TEXT:
                             if event.content:
                                 output_buffer += event.content
-                                _logger.log_token_progress(len(output_buffer), "compressing")
+                                _logger.debug(f"[OPENCODE COMPRESS OUTPUT] {event.content}")
                             now = time.time()
                             if now - last_edit_time > self.edit_rate_limit:
                                 last_edit_time = now
@@ -284,7 +289,10 @@ class StreamOrchestrator:
             cmd = assistant.get_command(prompt, agent=agent, format_json=True)
             start_time = time.time()
 
-            _logger.debug(f"Starting stream with command: {' '.join(cmd)}")
+            # ── Developer visibility: full command + prompt excerpt ─────────────
+            _logger.info(f"[OPENCODE SPAWN] cmd={' '.join(cmd[:5])} ... ({len(cmd)} args)")
+            _logger.debug(f"[OPENCODE SPAWN FULL CMD] {' '.join(cmd)}")
+            _logger.info(f"[OPENCODE PROMPT EXCERPT] {prompt[:500]}{'...' if len(prompt)>500 else ''}")
 
             try:
                 process = await asyncio.create_subprocess_exec(
@@ -349,7 +357,14 @@ class StreamOrchestrator:
                         line_decoded = line.decode("utf-8").strip()
                         if is_stderr:
                             error_output += line_decoded + "\n"
+                            # Tee stderr immediately so developers never miss subprocess errors
+                            if line_decoded:
+                                _logger.warning(f"[OPENCODE STDERR] {line_decoded}")
                             continue
+
+                        # ── Log every raw JSON line at debug level (full transparency) ─────
+                        if line_decoded:
+                            _logger.debug(f"[OPENCODE RAW] {line_decoded}")
 
                         event = assistant.parse_line(line_decoded)
                         if not event:
@@ -360,7 +375,6 @@ class StreamOrchestrator:
 
                         if event.type == StreamEventType.REASONING:
                             token_count += 1
-                            _logger.log_token_progress(token_count, "reasoning")
                             progress.start_stage(ProcessingStage.THINKING, "Thinking...")
 
                             if last_event_type != StreamEventType.REASONING:
@@ -368,10 +382,13 @@ class StreamOrchestrator:
                                 active_body = ""
                                 bubble_start_time = time.time()
                                 last_event_type = StreamEventType.REASONING
+                                _logger.info(f"[OPENCODE THINKING START] agent={agent} elapsed={int(time.time()-bubble_start_time)}s")
 
                             if event.content:
                                 active_body += event.content
                                 output_buffer += event.content
+                                # Log every reasoning chunk in full — this is the stream of thought
+                                _logger.debug(f"[OPENCODE THINKING] {event.content}")
 
                             if on_progress:
                                 on_progress(progress)
@@ -384,9 +401,12 @@ class StreamOrchestrator:
                                 active_body = ""
                                 bubble_start_time = time.time()
                                 progress.start_stage(ProcessingStage.WRITING, "Writing response...")
+                                _logger.info(f"[OPENCODE OUTPUT START] agent={agent}")
                             if event.content:
                                 active_body += event.content
                                 output_buffer += event.content
+                                # Log every text chunk in full so the developer sees what's being written
+                                _logger.debug(f"[OPENCODE OUTPUT] {event.content}")
                             if on_progress:
                                 on_progress(progress)
                             await emit_progress()
@@ -396,7 +416,10 @@ class StreamOrchestrator:
                             last_tool_name = name
                             inp = event.metadata.get("input", "")
 
-                            _logger.debug(f"Tool call: {name}", input_length=len(inp))
+                            # Full tool call visibility — name AND complete input
+                            _logger.info(f"[OPENCODE TOOL_USE] name={name}")
+                            if inp:
+                                _logger.info(f"[OPENCODE TOOL_USE INPUT]\n{inp}")
                             progress.start_stage(ProcessingStage.TOOL_EXECUTION, f"Calling {name}...")
 
                             active_header = f"🛠️ Calling: {name}"
@@ -415,6 +438,9 @@ class StreamOrchestrator:
                                 active_header = f"📋 Result from: {last_tool_name}"
                                 active_body = res_text[:800]
                                 bubble_start_time = time.time()
+                                # Full tool result — developers need to see what the tool returned
+                                _logger.info(f"[OPENCODE TOOL_RESULT] from={last_tool_name}")
+                                _logger.debug(f"[OPENCODE TOOL_RESULT CONTENT]\n{res_text}")
                             last_event_type = StreamEventType.TOOL_RESULT
                             last_activity = time.time()
                             await emit_progress()
@@ -495,50 +521,53 @@ class StreamOrchestrator:
                     output_length=len(output_buffer),
                 )
 
+                # ── Detect empty output (usually indicates model/API error) ─────────────
+                if token_count == 0 and output_buffer.strip() == "":
+                    error_msg = f"Assistant returned no output. stderr: {error_output[:500] if error_output else 'none'}"
+                    _logger.error(f"[OPENCODE ERROR] {error_msg}")
+                    raise RuntimeError(f"Assistant failed: no output generated. Model may be unavailable or invalid.")
+
+                # ── Full exit summary ────────────────────────────────────────────
+                _logger.info(
+                    f"[OPENCODE EXIT] returncode={process.returncode} "
+                    f"elapsed={elapsed_ms}ms tokens={token_count} output_bytes={len(output_buffer)}"
+                )
+                if error_output.strip():
+                    _logger.warning(f"[OPENCODE STDERR SUMMARY]\n{error_output.strip()}")
+
                 clean_output = self._strip_ansi(output_buffer.strip())
                 question = self._detect_question(clean_output)
                 metadata: Dict[str, Any] = {}
 
                 if question:
-                    if agent == "coder" and _continuation_count < 2:
-                        auto_prompt = (
-                            f"You paused and asked: \"{question}\"\n\n"
-                            f"Auto-response from the developer: Proceed with your best technical judgment. Make reasonable decisions without requiring further input. If multiple approaches are viable, choose the most practical one and implement it. Complete the task autonomously.\n\n"
-                            f"Original task context:\n{prompt[:600]}"
-                        )
-                        _logger.info("Auto-continuing after a question with best-judgment directive")
-                        return await self.run_streaming(
-                            auto_prompt,
-                            status_message,
-                            assistant=assistant,
-                            agent=agent,
-                            progress_callback=progress_callback,
-                            on_progress=on_progress,
-                            _continuation_count=_continuation_count + 1,
-                        )
-                    else:
-                        state = session_manager.get_or_create_session(chat_id)
-                        session_manager.set_pending_question(state.session_id, question)
-                        metadata["question"] = question
+                    state = session_manager.get_or_create_session(chat_id)
+                    session_manager.set_pending_question(state.session_id, question)
+                    metadata["question"] = question
 
-                    model_provider = getattr(assistant, "get_model", lambda: "")
-                    return StreamingResult(
-                        output=clean_output,
-                        tokens=token_count,
-                        question=question,
-                        assistant_name=assistant.name,
-                        model_name=model_provider(),
-                        metadata=metadata,
-                    )
+                model_provider = getattr(assistant, "get_model", lambda: "")
+                return StreamingResult(
+                    output=clean_output,
+                    tokens=token_count,
+                    question=question,
+                    assistant_name=assistant.name,
+                    model_name=model_provider(),
+                    metadata=metadata,
+                )
 
             except FileNotFoundError:
-                _logger.error("Assistant CLI command not found")
+                _logger.error(
+                    f"[OPENCODE ERROR] CLI command not found: '{cmd[0]}'. "
+                    "Is opencode installed and on PATH? Run: which opencode"
+                )
                 raise
             except asyncio.CancelledError:
-                # Normal cancellation, don't log as exception
+                _logger.info(f"[OPENCODE CANCELLED] agent={agent} chat_id={chat_id}")
+                raise
+            except TimeoutError as e:
+                _logger.error(f"[OPENCODE TIMEOUT] agent={agent} chat_id={chat_id}: {e}")
                 raise
             except Exception as e:
-                _logger.log_exception(f"Error in run_streaming: {e}")
+                _logger.log_exception(f"[OPENCODE EXCEPTION] agent={agent} chat_id={chat_id}: {e}")
                 raise
 
     def _strip_ansi(self, text: str) -> str:

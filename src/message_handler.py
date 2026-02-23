@@ -214,13 +214,6 @@ class MessageHandler:
             coding_prompt, update, context, streaming_msg, agent="coder"
         )
         
-        try:
-            summary = await self._generate_session_summary(code_window)
-            session_manager.add_session_summary(summary)
-            _logger.info("Session summary generated successfully.")
-        except Exception as e:
-            _logger.warning(f"Failed to generate session summary: {e}")
-        
         _logger.info("Finished processing #code intent.")
     
     async def _handle_assistant(self, tag: str, raw_text: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -268,7 +261,7 @@ class MessageHandler:
         bubble_start_time = time.time()
         
         assistant = manager.get_default_assistant()
-        extra = session_manager.format_session_history_for_prompt()
+        extra = session_manager.format_current_context_for_prompt()
         prompt_val = assistant.format_prompt(window, BRAINSTORM_SYSTEM, extra_context=extra)
         
         cmd = assistant.get_command(prompt_val, agent="plan", format_json=True)
@@ -421,7 +414,37 @@ class MessageHandler:
                         text="🔄 Model rotated. Retrying brainstorming..."
                     )
         
+        if "ProviderModelNotFoundError" in error_output or "Model not found" in error_output:
+            _logger.error(f"Model not found error detected in brainstorm: {error_output[:200]}")
+            if session_manager.record_empty_response(chat_id):
+                await _edit_with_retry(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=streaming_msg.message_id,
+                    text="❌ <b>Model Not Found</b>: The specified model is not available. "
+                         "Please check your model configuration and try again.",
+                    parse_mode=ParseMode.HTML
+                )
+                session_manager.reset_empty_response_counter(chat_id)
+                return
+        
         response = combined_output.strip()
+        
+        if not response:
+            _logger.warning(f"Empty response from assistant for chat {chat_id}")
+            if session_manager.record_empty_response(chat_id):
+                await _edit_with_retry(
+                    context.bot,
+                    chat_id=chat_id,
+                    message_id=streaming_msg.message_id,
+                    text="❌ <b>LOOP DETECTED</b>: Assistant returned empty response 2+ times in a row. "
+                         "This usually indicates a model/API issue. Please try again later or use a different model.",
+                    parse_mode=ParseMode.HTML
+                )
+                session_manager.reset_empty_response_counter(chat_id)
+                return
+        else:
+            session_manager.reset_empty_response_counter(chat_id)
         
         try:
             chunks = split_message_with_code_block(response)
@@ -448,26 +471,6 @@ class MessageHandler:
         
         session_manager.add_message(chat_id, "assistant", response, solo=False)
         _logger.info("Finished processing Brainstorm intent.")
-    
-    async def _generate_session_summary(self, window: List[Dict[str, Any]]) -> str:
-        from llm_orchestrator import LLMOrchestrator
-        
-        lines = []
-        for entry in window:
-            label = "Developer" if entry["role"] == "user" else "Assistant"
-            lines.append(f"{label}: {entry['content']}")
-        convo_text = "\n\n".join(lines)
-        summary_prompt = (
-            "Given this conversation, generate a concise 2-3 sentence summary of what was accomplished "
-            "or discussed. Focus on the high-level goals and outcomes, not granular details. "
-            "Start with action verbs like 'Implemented', 'Fixed', 'Discussed', 'Planned', etc.\n\n"
-            f"Conversation:\n{convo_text}\n\n"
-            "Summary (2-3 sentences):"
-        )
-        
-        orchestrator = LLMOrchestrator(self.file_path, self.telegram_edit_rate_limit)
-        result = await orchestrator.run_assistant(summary_prompt, agent="plan")
-        return result.strip()
     
     async def emit_progress(self, progress_data: Dict[str, Any]) -> None:
         for callback in self._progress_callbacks:
