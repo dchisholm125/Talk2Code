@@ -16,7 +16,7 @@ This document outlines the core tenets of the Talk2Code / voice-to-code project.
 ## 3. Keep the Human Informed
 - **No Black Boxes**: If a process (like compression or thinking) takes more than 1 second, the UI must reflect it.
 - **Live Streaming**: Stream *everything*—reasoning, intermediate text, and tool calls. 
-- **Wait Tickers**: Use visual wait tickers `[Wait: ###s]` for any residences in a single state over 30 seconds.
+- **Wait Tickers**: Use visual wait tickers `[Wait: ###s]` for any elements in a single state over 30 seconds.
 
 ## 4. Analysis First
 - **The "9:35 PM" Use Case**: The system admin at home needs an analyst, not just a writer. The AI should prioritize finding the *root cause* in logs or git commits before proposing code changes.
