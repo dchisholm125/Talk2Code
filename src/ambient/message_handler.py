@@ -9,11 +9,11 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
-from logger import get_logger
-from progress import ProcessingStage
-from session_manager import session_manager
-from telegram_handler import _edit_with_retry, is_authorized
-from command_router import CommandType, ParsedCommand
+from core.logger import get_logger
+from core.progress.progress import ProcessingStage
+from ambient.session import session_manager
+from ambient.telegram.handler import _edit_with_retry, is_authorized
+from ambient.router import CommandType, ParsedCommand
 
 _logger = get_logger()
 
@@ -112,7 +112,7 @@ class MessageHandler:
         if lower.startswith('#') and not lower.startswith('#solo'):
             parts = lower.split(None, 1)
             if len(parts) >= 1:
-                from assistant_manager import manager
+                from motor.manager import manager
                 tag = parts[0][1:]
                 if manager.get_assistant(tag):
                     await self._handle_assistant(tag, raw_text, update, context)
@@ -121,19 +121,19 @@ class MessageHandler:
         await self._handle_brainstorm(raw_text, update, context)
     
     async def _handle_stop(self, chat_id: int, update: Update) -> None:
-        from telegram_handler import handle_stop
+        from ambient.telegram.handler import handle_stop
         
         await handle_stop(chat_id)
         await update.message.reply_text("⛔ Stop requested. Terminating current action...")
     
     async def _handle_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        from telegram_handler import handle_restart
+        from ambient.telegram.handler import handle_restart
         
         status_msg = await update.message.reply_text("🔍 Checking for syntax errors before restart...")
         await handle_restart(update, context, status_msg)
     
     async def _handle_solo(self, chat_id: int, raw_text: str) -> None:
-        from telegram_handler import handle_solo
+        from ambient.telegram.handler import handle_solo
         
         content = raw_text[5:].strip()
         if not content:
@@ -142,8 +142,8 @@ class MessageHandler:
         await handle_solo(chat_id, content)
     
     async def _handle_code(self, raw_text: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        from llm_orchestrator import LLMOrchestrator, StreamOrchestrator
-        from telegram_formatter import format_for_telegram, should_format
+        from motor.orchestrator import LLMOrchestrator, StreamOrchestrator
+        from ambient.telegram.formatter import format_for_telegram, should_format
         import html
         
         chat_id = update.message.chat_id
@@ -194,7 +194,7 @@ class MessageHandler:
         session_manager.add_message(chat_id, "user", raw_text, solo=False)
         
         preview = coding_prompt[:600] + ("…" if len(coding_prompt) > 600 else "")
-        from assistant_manager import manager
+        from motor.manager import manager
         default_ast = manager.get_default_assistant()
         await _edit_with_retry(
             context.bot,
@@ -217,8 +217,8 @@ class MessageHandler:
         _logger.info("Finished processing #code intent.")
     
     async def _handle_assistant(self, tag: str, raw_text: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        from llm_orchestrator import StreamOrchestrator
-        from assistant_manager import manager
+        from motor.orchestrator import StreamOrchestrator
+        from motor.manager import manager
         
         _logger.info(f"Intent detected: Specific Assistant (#{tag})")
         
@@ -238,13 +238,13 @@ class MessageHandler:
             _logger.info(f"Finished processing #{tag} intent.")
     
     async def _handle_brainstorm(self, raw_text: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        from llm_orchestrator import BRAINSTORM_SYSTEM
-        from assistant_manager import manager
-        from telegram_formatter import format_for_telegram, should_format, get_parse_mode
-        from telegram_message_utils import split_message, split_message_with_code_block, prepare_html_preview
+        from motor.orchestrator import BRAINSTORM_SYSTEM
+        from motor.manager import manager
+        from ambient.telegram.formatter import format_for_telegram, should_format, get_parse_mode
+        from ambient.telegram.utils import split_message, split_message_with_code_block, prepare_html_preview
         import asyncio
         import html
-        from assistants.base import StreamEventType
+        from motor.adapters.base import StreamEventType
         
         chat_id = update.message.chat_id
         

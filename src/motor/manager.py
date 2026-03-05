@@ -1,9 +1,9 @@
 import logging
 from typing import Dict, Optional, List
 
-from assistants.base import CodingAssistant
-from assistants.opencode import OpenCodeAssistant
-from assistants.gemini import GeminiAssistant
+from motor.adapters.base import CodingAssistant
+from motor.adapters.opencode import OpenCodeAssistant
+from motor.adapters.gemini import GeminiAssistant
 
 logger = logging.getLogger(__name__)
 

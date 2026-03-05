@@ -9,9 +9,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.error import TimedOut, RetryAfter
 
-from logger import get_logger
-from session_manager import session_manager
-from telegram_message_utils import prepare_html_preview
+from core.logger import get_logger
+from ambient.session import session_manager
+from ambient.telegram.utils import prepare_html_preview
 
 _logger = get_logger()
 

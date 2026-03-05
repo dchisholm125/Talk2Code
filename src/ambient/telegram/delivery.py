@@ -6,7 +6,7 @@ from typing import Any, AsyncGenerator, Dict, Optional
 
 from telegram.constants import ParseMode
 
-from logger import get_logger
+from core.logger import get_logger
 
 _logger = get_logger()
 
@@ -24,9 +24,9 @@ from core.events import (
 )
 from core.interfaces import DeliveryInterface, ProgressPayload
 from core.message import Message
-from telegram_handler import _edit_with_retry
-from telegram_message_utils import split_message
-from telegram_formatter import format_for_telegram
+from ambient.telegram.handler import _edit_with_retry
+from ambient.telegram.utils import split_message
+from ambient.telegram.formatter import format_for_telegram
 
 class TelegramDeliveryAdapter(DeliveryInterface):
     def __init__(self, bot: Any) -> None:

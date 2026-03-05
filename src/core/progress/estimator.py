@@ -15,8 +15,8 @@ from collections import deque
 import time
 import re
 
-from progress import ProcessingStage
-from logger import get_logger
+from core.progress.progress import ProcessingStage
+from core.logger import get_logger
 
 _logger = get_logger()
 

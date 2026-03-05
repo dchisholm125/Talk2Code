@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from srm_ast_mcts import ASTPlanner
-from srm_code_bridge import SRMCodeBridge
-from logger import get_logger
+from srm.planner import ASTPlanner
+from srm.bridge import SRMCodeBridge
+from core.logger import get_logger
 
 _logger = get_logger()
 

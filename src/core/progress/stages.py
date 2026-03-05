@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 import time
 import asyncio
 
-from logger import get_logger
-from progress import ProcessingStage, ProgressTracker
+from core.logger import get_logger
+from core.progress.progress import ProcessingStage, ProgressTracker
 
 _logger = get_logger()
 

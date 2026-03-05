@@ -3,9 +3,9 @@ from typing import Optional, Dict, Any, Callable, Awaitable
 from dataclasses import dataclass
 import re
 
-from logger import get_logger
-from assistant_manager import manager
-from assistants.base import CodingAssistant
+from core.logger import get_logger
+from motor.manager import manager
+from motor.adapters.base import CodingAssistant
 
 _logger = get_logger()
 
@@ -115,9 +115,9 @@ class CommandExecutor:
         context: Any,
         extra: str = ""
     ) -> Dict[str, Any]:
-        from llm_orchestrator import LLMOrchestrator, StreamOrchestrator
-        from telegram_handler import _edit_with_retry
-        from session_manager import session_manager
+        from motor.orchestrator import LLMOrchestrator, StreamOrchestrator
+        from ambient.telegram.handler import _edit_with_retry
+        from ambient.session import session_manager
         from telegram.constants import ParseMode
         import html
         import asyncio
@@ -193,8 +193,8 @@ class CommandExecutor:
         command: ParsedCommand,
         chat_id: int
     ) -> Dict[str, Any]:
-        from session_manager import session_manager
-        from telegram_handler import handle_solo
+        from ambient.session import session_manager
+        from ambient.telegram.handler import handle_solo
         
         content = command.content
         if not content:
@@ -209,7 +209,7 @@ class CommandExecutor:
         command: ParsedCommand,
         chat_id: int
     ) -> Dict[str, Any]:
-        from telegram_handler import handle_stop
+        from ambient.telegram.handler import handle_stop
         
         await handle_stop(chat_id)
         
@@ -221,7 +221,7 @@ class CommandExecutor:
         update: Any,
         context: Any
     ) -> Dict[str, Any]:
-        from telegram_handler import handle_restart
+        from ambient.telegram.handler import handle_restart
         
         status_msg = await update.message.reply_text("🔍 Checking for syntax errors before restart...")
         await handle_restart(update, context, status_msg)
@@ -234,7 +234,7 @@ class CommandExecutor:
         update: Any,
         context: Any
     ) -> Dict[str, Any]:
-        from llm_orchestrator import StreamOrchestrator
+        from motor.orchestrator import StreamOrchestrator
         from telegram.constants import ParseMode
         
         tag = command.assistant_tag
@@ -262,12 +262,12 @@ class CommandExecutor:
         update: Any,
         context: Any
     ) -> Dict[str, Any]:
-        from llm_orchestrator import BRAINSTORM_SYSTEM
-        from session_manager import session_manager
-        from telegram_formatter import should_format
-        from telegram_handler import _edit_with_retry
-        from telegram_message_utils import split_message, split_message_with_code_block
-        from telegram_formatter import format_for_telegram, get_parse_mode
+        from motor.orchestrator import BRAINSTORM_SYSTEM
+        from ambient.session import session_manager
+        from ambient.telegram.formatter import should_format
+        from ambient.telegram.handler import _edit_with_retry
+        from ambient.telegram.utils import split_message, split_message_with_code_block
+        from ambient.telegram.formatter import format_for_telegram, get_parse_mode
         import asyncio
         import html
         
@@ -305,7 +305,7 @@ class CommandExecutor:
         last_tool_name = "tool"
         bubble_start_time = time.time()
         
-        from assistants.base import StreamEventType
+        from motor.adapters.base import StreamEventType
         
         async def read_stream_to_buffer(stream, is_stderr=False):
             nonlocal combined_output, reasoning_buffer, error_output, last_edit_time

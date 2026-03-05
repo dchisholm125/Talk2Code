@@ -15,22 +15,22 @@ from telegram.error import NetworkError
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
 
-from adapters.telegram_delivery import TelegramDeliveryAdapter
-from assistant_manager import manager
-from assistants.opencode import AVAILABLE_MODELS, OpenCodeAssistant
-from llm_orchestrator import StreamOrchestrator
-from logger import get_logger
-from observability.server import (
+from ambient.telegram.delivery import TelegramDeliveryAdapter
+from motor.manager import manager
+from motor.adapters.opencode import AVAILABLE_MODELS, OpenCodeAssistant
+from motor.orchestrator import StreamOrchestrator
+from core.logger import get_logger
+from ambient.observability.server import (
     OBSERVABILITY_HOST,
     OBSERVABILITY_PORT,
     start_observability_server,
 )
-from srm_context_engine import SRMContextEngine
-from telemetry import get_event_ledger
-from services.assistant_service import AssistantService
-from services.brainstorm_service import BrainstormService
-from session_manager import session_manager
-from telegram_handler import (
+from srm.context import SRMContextEngine
+from core.telemetry import get_event_ledger
+from core.services.assistant_service import AssistantService
+from core.services.brainstorm_service import BrainstormService
+from ambient.session import session_manager
+from ambient.telegram.handler import (
     handle_clear,
     handle_cancel,
     handle_format,

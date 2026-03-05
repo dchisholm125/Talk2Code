@@ -17,13 +17,13 @@ from core.events import (
 )
 from core.interfaces import ProgressPayload
 from core.message import Message
-from llm_orchestrator import BRAINSTORM_SYSTEM, StreamOrchestrator
-from observability.hub import get_observability_hub
-from progress import ProgressTracker
-from logger import get_logger
-from session_manager import session_manager
-from assistant_manager import manager
-from telemetry import get_event_ledger
+from motor.orchestrator import BRAINSTORM_SYSTEM, StreamOrchestrator
+from ambient.observability.hub import get_observability_hub
+from core.progress.progress import ProgressTracker
+from core.logger import get_logger
+from ambient.session import session_manager
+from motor.manager import manager
+from core.telemetry import get_event_ledger
 
 _logger = get_logger()
 
@@ -78,7 +78,7 @@ class BrainstormService:
         assistant = manager.get_default_assistant()
         user_text = request.text
         
-        from srm_context_engine import SRMContextEngine
+        from srm.context import SRMContextEngine
         import logging
         _logger.info(f"[SRM Brain] Extracting context for: {user_text}")
         

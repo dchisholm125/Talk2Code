@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 from typing import AsyncGenerator, Dict, Optional, Any, cast
 
-from assistants.base import StreamEvent, StreamEventType
+from motor.adapters.base import StreamEvent, StreamEventType
 from core.events import (
     ContentDelta,
     DomainEvent,
@@ -20,14 +20,14 @@ from core.events import (
     WorkflowState,
 )
 from core.interfaces import ProgressPayload, StreamingResult
-from observability.hub import get_observability_hub
-from progress import ProgressTracker
-from llm_orchestrator import LLMOrchestrator, StreamOrchestrator
-from logger import get_logger
-from progress_estimator import ProgressEstimator
-from session_manager import session_manager
+from ambient.observability.hub import get_observability_hub
+from core.progress.progress import ProgressTracker
+from motor.orchestrator import LLMOrchestrator, StreamOrchestrator
+from core.logger import get_logger
+from core.progress.estimator import ProgressEstimator
+from ambient.session import session_manager
 from core.message import Message
-from telemetry import get_event_ledger
+from core.telemetry import get_event_ledger
 
 _logger = get_logger()
 
@@ -108,7 +108,7 @@ class OrchestratorService:
             actionable_intent = await self._compress_conversation(session_id, window, extra, queue)
             _logger.info(f"[SRM Trigger] Compressed Intent for MCTS: {actionable_intent}")
 
-            from srm_context_engine import SRMContextEngine
+            from srm.context import SRMContextEngine
             srm_engine = SRMContextEngine(self.file_path)
             srm_context = await asyncio.to_thread(srm_engine.get_context_for_prompt, actionable_intent, mode="build")
 

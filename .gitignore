@@ -8,3 +8,6 @@ dist/
 build/
 .vscode/
 .idea/
+AGENTS.md
+GEMINI.md
+*/node_modules
