@@ -50,8 +50,8 @@ The Talk2Code workflow is designed to be completely fluid from a mobile device:
 * **`#code [intent]`**: The **Target Lock**. Synthesizes your recent brainstorming into an actionable prompt, triggers the SRM to find the exact files, and unleashes the coding assistant to autonomously write the code.
 * **`/clear`**: Wipes the conversation history. Use this to sterilize the context window before starting a completely new task to prevent cross-contamination.
 * **`#<assistant> [prompt]`**: Route a specific prompt directly to a registered assistant (e.g., `#gemini fix the auth bug`).
-* **`#model` / `#model #code**`: Switch between the curated plan/build models on the fly.
-* **`#stop` / `/cancel**`: Manually terminate the active assistant run.
+* **`#model` / `#model #code`**: Switch between the curated plan/build models on the fly.
+* **`#stop` / `/cancel`**: Manually terminate the active assistant run.
 
 ---
 
