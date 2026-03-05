@@ -5,7 +5,7 @@ import html
 import py_compile
 from pathlib import Path
 from typing import Optional, Any, Dict
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.error import TimedOut, RetryAfter
 
@@ -133,7 +133,7 @@ async def handle_clear(update: Update, allowed_user_id: Optional[str]) -> None:
     chat_id = update.message.chat_id
     _logger.info(f"[CMD /clear] chat={chat_id} user={update.effective_user.id}")
     session_manager.clear_conversation(chat_id)
-    await update.message.reply_text("🧹 Conversation cleared. Fresh start!")
+    await update.message.reply_text("🧹 Session cleared. The context window is pristine and ready for a new task.")
 
 
 async def handle_cancel(update: Update, allowed_user_id: Optional[str]) -> None:
@@ -199,3 +199,100 @@ async def handle_solo(chat_id: int, content: str) -> None:
 async def handle_stop(chat_id: int) -> None:
     session_manager.cancel_session(chat_id)
     _logger.info(f"[CMD #stop] chat={chat_id}: session cancellation requested")
+
+
+async def handle_format(update: Update, context: Any, allowed_user_id: Optional[str]) -> None:
+    """Showcases the full gamut of Telegram's formatting and interactive capabilities."""
+    if not is_authorized(update.effective_user.id, allowed_user_id):
+        return
+
+    chat_id = update.message.chat_id
+    bot = context.bot
+
+    _logger.info(f"Showcasing formats for chat {chat_id}")
+
+    # 1. Heading
+    await bot.send_message(
+        chat_id=chat_id,
+        text="🚀 <b>Starting Telegram Capability Showcase...</b>",
+        parse_mode=ParseMode.HTML
+    )
+    await asyncio.sleep(0.5)
+
+    # 2. Rich Text Formatting
+    text_formatting = (
+        "<b>1. Text Formatting (HTML)</b>\n\n"
+        "• <b>Bold</b>, <i>Italic</i>, <u>Underline</u>, <s>Strikethrough</s>\n"
+        "• <tg-spoiler>Spoiler text (tap to reveal)</tg-spoiler>\n"
+        "• Combined: <b><i><u><s>Bold Italic Underline Strikethrough</s></u></i></b>\n"
+        "• Links: <a href=\"https://github.com/dchisholm125/voice-to-code\">voice-to-code GitHub</a>"
+    )
+    await bot.send_message(chat_id=chat_id, text=text_formatting, parse_mode=ParseMode.HTML)
+    await asyncio.sleep(0.5)
+
+    # 3. Code Display
+    code_showcase = (
+        "<b>2. Code Display</b>\n\n"
+        "Inline: <code>const x = 42;</code>\n\n"
+        "Block with syntax hint:\n"
+        "<pre><code class=\"language-python\">\n"
+        "def greet(name):\n"
+        "    return f\"Hello, {name}!\"\n\n"
+        "print(greet(\"World\"))\n"
+        "</code></pre>"
+    )
+    await bot.send_message(chat_id=chat_id, text=code_showcase, parse_mode=ParseMode.HTML)
+    await asyncio.sleep(0.5)
+
+    # 4. Interactive Keyboards
+    keyboard = [
+        [
+            InlineKeyboardButton("Option A", callback_data="test_a"),
+            InlineKeyboardButton("Option B", callback_data="test_b"),
+        ],
+        [InlineKeyboardButton("🔗 Open Repo", url="https://github.com/dchisholm125/voice-to-code")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await bot.send_message(
+        chat_id=chat_id,
+        text="<b>3. Interactive UI (Inline Buttons)</b>",
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.HTML
+    )
+    await asyncio.sleep(0.5)
+
+    # 5. Media (Photo)
+    try:
+        await bot.send_photo(
+            chat_id=chat_id,
+            photo="https://raw.githubusercontent.com/python-telegram-bot/logos/master/logo-text-transparent.png",
+            caption="<b>4. Media Elements</b>\nPhotos can have HTML captions!",
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        _logger.warning(f"Failed to send test photo: {e}")
+        await bot.send_message(chat_id=chat_id, text=f"⚠️ (Media test bypassed: {e})")
+    await asyncio.sleep(0.5)
+
+    # 6. Special: Dice & Poll
+    await bot.send_message(chat_id=chat_id, text="<b>5. Native Widgets (Dice & Poll)</b>", parse_mode=ParseMode.HTML)
+    await bot.send_dice(chat_id=chat_id, emoji='🎲')
+    await bot.send_poll(
+        chat_id=chat_id,
+        question="How's the showcase so far?",
+        options=["Amazing! 🤩", "Pretty good! 👍", "Too fast! 💨", "Needs more GIFs! 🎞️"],
+        is_anonymous=False
+    )
+    await asyncio.sleep(0.5)
+
+    # 7. Location
+    await bot.send_message(chat_id=chat_id, text="<b>6. Location & Contact</b>", parse_mode=ParseMode.HTML)
+    await bot.send_location(chat_id=chat_id, latitude=37.7749, longitude=-122.4194)
+    await asyncio.sleep(0.5)
+
+    # 8. Final Message
+    await bot.send_message(
+        chat_id=chat_id,
+        text="✅ <b>Showcase Complete!</b>\nWe can use any combination of these to upgrade our bot's UX.",
+        parse_mode=ParseMode.HTML
+    )

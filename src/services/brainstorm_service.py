@@ -75,16 +75,27 @@ class BrainstormService:
 
         _logger.info(f"[BRAINSTORM START] session={session_id} chat={chat_id} text={request.text!r}")
 
-        window = session_manager.get_conversation_window(chat_id)
         assistant = manager.get_default_assistant()
-        extra = session_manager.format_current_context_for_prompt(session_id)
-
-        prompt = assistant.format_prompt(window, BRAINSTORM_SYSTEM, extra_context=extra)
+        user_text = request.text
+        
+        from srm_context_engine import SRMContextEngine
+        import logging
+        _logger.info(f"[SRM Brain] Extracting context for: {user_text}")
+        
+        # Get the pristine XML context from our Symbolic Brain
+        srm_engine = SRMContextEngine(self.file_path)
+        srm_context = await asyncio.to_thread(srm_engine.get_context_for_prompt, user_text, mode="plan")
+        _logger.info(f"[SRM Bridge] Payload generated. Length: {len(srm_context)}")
+        
+        # The ENTIRE prompt sent to the LLM should now just be:
+        system_instruction = "System: You are an architectural planner. Review the provided context. Output a concise plan to fulfill the User Request. Do NOT refuse to answer, do NOT apologize. Output your final plan in a standard Markdown code block."
+        prompt = f"{system_instruction}\n\n{srm_context}\n\nUser Request: {user_text}"
+        
         placeholder = Message(None, session_id, None, "")
         await self.event_ledger.log_event(
             session_id,
             "LLM_Thought_Started",
-            payload={"stage": "brainstorm", "reason": "Streaming brainstorming assistant"},
+            payload={"stage": "brainstorm", "reason": "Streaming planning assistant with SRM payload"},
         )
 
         async def progress_sink(payload: ProgressPayload) -> None:

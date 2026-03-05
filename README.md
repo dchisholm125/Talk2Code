@@ -1,4 +1,4 @@
-# Talk2Code (v0.3.0)
+# Talk2Code (v0.2.1)
 
 ### Talk to your codebase. From anywhere.
 

@@ -18,7 +18,7 @@ from core.events import (
 )
 from core.interfaces import DeliveryInterface
 from core.message import Message
-from context_engine import ContextEngine
+from srm_context_engine import SRMContextEngine
 from session_manager import session_manager
 from telemetry import EventLedger
 from logger import get_logger
@@ -43,12 +43,12 @@ class AssistantService:
         self,
         file_path: str,
         edit_rate_limit: float,
-        context_engine: ContextEngine,
+        srm_engine: SRMContextEngine,
         event_ledger: EventLedger,
     ) -> None:
         self.file_path = file_path
         self.edit_rate_limit = edit_rate_limit
-        self.context_engine = context_engine
+        self.srm_engine = srm_engine
         self.event_ledger = event_ledger
         self.orchestrator = OrchestratorService(file_path, edit_rate_limit)
 
@@ -90,49 +90,13 @@ class AssistantService:
                 "Analyzing intent and preparing a tailored prompt"
             )
 
-            try:
-                _logger.info(f"[#CODE CONTEXT] session={session_id}: building context envelope")
-                envelope, reason = await self.context_engine.build_context_envelope(
-                    session_id, message.text
-                )
-                _logger.info(
-                    f"[#CODE CONTEXT] intent_summary={envelope.intent_summary!r} "
-                    f"entities={envelope.entities} reason={reason!r}"
-                )
-                session_manager.update_context_envelope(session_id, envelope)
-                await self.event_ledger.log_event(
-                    session_id,
-                    "IntentExtracted",
-                    payload={
-                        "summary": envelope.intent_summary,
-                        "entities": envelope.entities,
-                    },
-                    reason="LLM digested the request into intent and entities",
-                )
-                envelope_dict = asdict(envelope)
-                await self.event_ledger.log_event(
-                    session_id,
-                    "ContextSnapshotTaken",
-                    payload={"envelope": envelope_dict},
-                    reason=reason,
-                )
-            except Exception as exc:
-                _logger.warning(f"[#CODE CONTEXT FAILED] session={session_id}: {exc}", exc_info=True)
-
-            context_summary = session_manager.context_summary_for_prompt(session_id)
-            _logger.info(f"[#CODE CONTEXT SUMMARY] length={len(context_summary)} combined_extra_parts: extra={bool(extra)}, context_summary={bool(context_summary)}")
-            extra_parts: List[str] = []
-            if extra:
-                extra_parts.append(extra)
-            if context_summary:
-                extra_parts.append(context_summary)
-            combined_extra = "\n\n".join(extra_parts)
-
+            # SRM ENFORCEMENT: We let the orchestrator handle the symbolic extraction.
+            # We just pass the extra arguments (if any) and the user text.
             async for event in self.orchestrator.stream_code_workflow(
                 session_id,
                 message.chat_id,
                 message.text,
-                extra=combined_extra,
+                extra=extra,
             ):
                 if isinstance(event, LifecycleEvent) and event.status == LifecycleStatus.STARTED:
                     continue
@@ -176,6 +140,13 @@ class AssistantService:
                 self._check_syntax, changed_py + untracked_py
             )
             _logger.info(f"[POST-WORKFLOW] syntax_errors={syntax_errors}")
+            
+            # Synchronize changes back to the SRM Brain (Synaptic Plasticity)
+            all_modified = changed_py + untracked_py
+            if all_modified:
+                _logger.info(f"[SRM] Syncing {len(all_modified)} files to the Brain...")
+                await asyncio.to_thread(self.srm_engine.sync_file_changes, all_modified)
+
             report = self._format_report(git_stat, syntax_errors)
             _logger.info(f"[POST-WORKFLOW] chat={message.chat_id}: session report ready, errors={len(syntax_errors)}")
         except Exception as exc:

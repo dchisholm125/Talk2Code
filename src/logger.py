@@ -16,7 +16,7 @@ class LogLevel(Enum):
     WARNING = "WARNING"
     ERROR = "ERROR"
 
-DEFAULT_LOG_LEVEL = LogLevel.INFO
+DEFAULT_LOG_LEVEL = LogLevel.DEBUG
 DEFAULT_LOG_PATH = Path.home() / ".voice-to-code" / "app.log"
 
 VERBOSE_LOG_ENV = os.getenv("VERBOSE_LOGGING", "false").lower() in ("true", "1", "yes")

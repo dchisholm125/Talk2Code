@@ -25,7 +25,7 @@ from observability.server import (
     OBSERVABILITY_PORT,
     start_observability_server,
 )
-from context_engine import ContextEngine
+from srm_context_engine import SRMContextEngine
 from telemetry import get_event_ledger
 from services.assistant_service import AssistantService
 from services.brainstorm_service import BrainstormService
@@ -33,6 +33,7 @@ from session_manager import session_manager
 from telegram_handler import (
     handle_clear,
     handle_cancel,
+    handle_format,
     handle_restart,
     handle_solo,
     handle_start,
@@ -55,9 +56,11 @@ _logger = get_logger()
 _processed_message_ids: set[int] = set()
 
 event_ledger = get_event_ledger()
-context_engine = ContextEngine(FILE_PATH, TELEGRAM_EDIT_RATE_LIMIT)
+srm_engine = SRMContextEngine(FILE_PATH)
+# The SRM is slightly heavier; boot it before passing it down
+srm_engine.boot()
 assistant_service = AssistantService(
-    FILE_PATH, TELEGRAM_EDIT_RATE_LIMIT, context_engine, event_ledger
+    FILE_PATH, TELEGRAM_EDIT_RATE_LIMIT, srm_engine, event_ledger
 )
 brainstorm_service = BrainstormService(FILE_PATH, TELEGRAM_EDIT_RATE_LIMIT)
 
@@ -215,6 +218,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await handle_clear(update, ALLOWED_USER_ID)
+
+
+async def cmd_format(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await handle_format(update, context, ALLOWED_USER_ID)
 
 
 async def cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -384,6 +391,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("clear", cmd_clear))
     app.add_handler(CommandHandler("cancel", cmd_cancel))
+    app.add_handler(CommandHandler("format", cmd_format))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     _logger.info("Bot running and polling for updates")

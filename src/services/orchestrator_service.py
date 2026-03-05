@@ -101,12 +101,33 @@ class OrchestratorService:
                 return
 
             current_state = WorkflowState.THINKING
-            await self._emit(queue, StateChanged(current_state, "Compressing conversation into a prompt"), session_id)
-            await self._log_llm_thought(session_id, "compressing", "Compressing conversation into a prompt")
+            await self._emit(queue, StateChanged(current_state, "Analyzing symbolic request"), session_id)
+            await self._log_llm_thought(session_id, "analyzing", "Isolating symbolic context")
 
-            prompt = await self._compress_conversation(session_id, window, extra, queue)
-            # Improvement #2: instruct the coding agent to verify its own edits
-            prompt += _CODING_VERIFICATION_SUFFIX
+            # First, compress the conversation into an intent map
+            actionable_intent = await self._compress_conversation(session_id, window, extra, queue)
+            _logger.info(f"[SRM Trigger] Compressed Intent for MCTS: {actionable_intent}")
+
+            from srm_context_engine import SRMContextEngine
+            srm_engine = SRMContextEngine(self.file_path)
+            srm_context = await asyncio.to_thread(srm_engine.get_context_for_prompt, actionable_intent, mode="build")
+
+            await self.event_ledger.log_event(
+                session_id,
+                "ContextSnapshotTaken",
+                payload={"srm_payload": srm_context[:1000] + "..."},
+                reason="SRM MCTS isolated relevant symbolic context",
+            )
+
+            # Generate the pure prompt using only the srm context and the isolated actionable intent
+            system_prompt = (
+                "You are an expert software engineer. Analyze the specific symbolic context "
+                "provided below and implement the user's request with high precision. "
+                "Only modify the files provided in the context blocks."
+            )
+            prompt = f"{system_prompt}\n\n{srm_context}\n\nExecute this request: {actionable_intent}" + _CODING_VERIFICATION_SUFFIX
+
+            
             session_manager.advance_window(chat_id)
             session_manager.add_message(chat_id, "user", user_text, solo=False)
 
