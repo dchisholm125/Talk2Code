@@ -22,16 +22,36 @@ Talk2Code solves the "Context Window Crisis" by introducing the **Symbolic Reaso
 
 ### How the SRM Works:
 
-1. **The Nerve (AST Graph Ingestion):** On boot, Talk2Code deterministically parses your Python/TypeScript codebase into a strict mathematical Directed Acyclic Graph (DAG) of discrete symbols (Classes, Functions, Imports).
-2. **The Brain (MCTS Planner):** When you send a prompt, a local Monte Carlo Tree Search (MCTS) mathematically traverses the AST edges (`CALLS`, `IMPORTS`) to isolate the exact nodes required for your feature.
-3. **The Bridge (Micro-Context):** The system rips out only the exact source code of the targeted nodes, generating a pristine, highly compressed XML payload (usually < 500 tokens).
-4. **The Hands (OpenCode):** The cloud LLM receives a biologically sterile prompt devoid of conversational noise, allowing it to instantly write perfect, zero-shot code.
+1.  **The Nerve (`srm/nerve.py`):** On boot, Talk2Code deterministically parses your Python/TypeScript codebase into a strict mathematical Directed Acyclic Graph (DAG) of discrete symbols (Classes, Functions, Imports).
+2.  **The Brain (`srm/planner.py`):** When you send a prompt, a local Monte Carlo Tree Search (MCTS) mathematically traverses the AST edges (`CALLS`, `IMPORTS`) to isolate the exact nodes required for your feature.
+3.  **The Bridge (`srm/bridge.py`):** The system rips out only the exact source code of the targeted nodes, generating a pristine, highly compressed XML payload (usually < 500 tokens).
+4.  **The Hands (`motor/orchestrator.py`):** The motor cortex receives a biologically sterile prompt devoid of conversational noise, allowing it to instantly write perfect, zero-shot code via OpenCode/Gemini.
 
 ### 🧬 Synaptic Plasticity (Real-Time Learning)
 
-A static graph is a dead graph. Talk2Code features **Synaptic Plasticity**. When the autonomous agent successfully writes new code to your disk, the SRM surgically hot-swaps the modified AST nodes in milliseconds. The Brain rewires its understanding of your architecture in real-time, zero-downtime required.
+A static graph is a dead graph. Talk2Code features **Synaptic Plasticity**. When the autonomous agent successfully writes new code to your disk, the SRM surgically hot-swaps the modified AST nodes in milliseconds. The Brain rewires its understanding of your architecture in real-time.
 
 ---
+
+## 🏛️ Architecture: The Four Biological Pillars
+
+Talk2Code is organized around a neuro-symbolic metaphor. Instead of generic modules, the codebase is structured into four distinct biological pillars:
+
+### 1. 🎙️ The Voice (`src/ambient/`)
+*The Perceptual Layer.*
+Handles how the world perceives the bot and how the bot perceives the user. Contains **Telegram handlers**, **session management**, and the **FastAPI Observability server**.
+
+### 2. 🧠 The Brain (`src/srm/`)
+*The Reasoning Layer (Headless SRM).*
+A biologically sterile reasoning engine that handles **AST Nerve ingestion**, **MCTS Planning**, and **Symbolic Context generation**. Researchers can use this pillar independently of the UI.
+
+### 3. 🦴 The Spine (`src/core/`)
+*The Structural Layer.*
+The central nervous system routing signals between the Voice and the Brain. Houses **loggers**, **telemetry**, **event ledgers**, and internal **orchestration services**.
+
+### 4. 🧤 The Hands (`src/motor/`)
+*The Executive Layer.*
+The motor cortex of the system. Contains the **LLM Adapters** (OpenCode, Gemini) that take symbolic plans from the Brain and physically execute them onto the disk.
 
 ## ⚡ Core Application Features
 
