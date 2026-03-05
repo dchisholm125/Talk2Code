@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from telegram_message_utils import (
+from ambient.telegram.utils import (
     is_within_limit,
     find_split_point,
     split_message,

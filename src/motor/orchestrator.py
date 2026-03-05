@@ -3,15 +3,15 @@ import subprocess
 import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from assistants.base import CodingAssistant, StreamEvent, StreamEventType
-from assistant_manager import manager
-from progress import ProgressTracker, ProcessingStage
-from logger import get_logger
-from progress_estimator import ProgressEstimator
-from stages import HeartbeatManager, StageTracker
+from motor.adapters.base import CodingAssistant, StreamEvent, StreamEventType
+from motor.manager import manager
+from core.progress.progress import ProgressTracker, ProcessingStage
+from core.logger import get_logger
+from core.progress.estimator import ProgressEstimator
+from core.progress.stages import HeartbeatManager, StageTracker
 from core.interfaces import ProgressPayload, StreamingResult
 from core.message import Message
-from session_manager import session_manager
+from ambient.session import session_manager
 
 _logger = get_logger()
 

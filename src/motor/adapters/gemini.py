@@ -1,6 +1,6 @@
 import logging
 from typing import List, Optional
-from assistants.base import CodingAssistant, StreamEvent, StreamEventType
+from motor.adapters.base import CodingAssistant, StreamEvent, StreamEventType
 
 logger = logging.getLogger(__name__)
 

@@ -18,12 +18,12 @@ from core.events import (
 )
 from core.interfaces import DeliveryInterface
 from core.message import Message
-from srm_context_engine import SRMContextEngine
-from session_manager import session_manager
-from telemetry import EventLedger
-from logger import get_logger
-from services.orchestrator_service import OrchestratorService
-from services.prompt_handler import handle_prompt_intent as _handle_prompt_intent
+from srm.context import SRMContextEngine
+from ambient.session import session_manager
+from core.telemetry import EventLedger
+from core.logger import get_logger
+from core.services.orchestrator_service import OrchestratorService
+from core.services.prompt_handler import handle_prompt_intent as _handle_prompt_intent
 
 _logger = get_logger()
 

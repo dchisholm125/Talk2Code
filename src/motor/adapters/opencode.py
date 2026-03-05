@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from typing import List, Optional
-from assistants.base import CodingAssistant, StreamEvent, StreamEventType
+from motor.adapters.base import CodingAssistant, StreamEvent, StreamEventType
 
 # Curated list of OpenCode-compatible models shown in the #model picker.
 # Format: (display_label, opencode_model_id)

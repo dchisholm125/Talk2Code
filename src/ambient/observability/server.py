@@ -13,8 +13,8 @@ from sse_starlette import EventSourceResponse
 from uvicorn import Config, Server
 
 from core.events import ProgressUpdate, SessionID
-from observability.hub import get_observability_hub
-from telemetry import TelemetryEvent, get_event_ledger
+from ambient.observability.hub import get_observability_hub
+from core.telemetry import TelemetryEvent, get_event_ledger
 
 OBSERVABILITY_HOST = "0.0.0.0"
 OBSERVABILITY_PORT = 8765

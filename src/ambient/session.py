@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.events import ContextEnvelope, SessionID
-from logger import get_logger
-from telemetry import get_event_ledger
+from core.logger import get_logger
+from core.telemetry import get_event_ledger
 
 SESSION_STATE_PATH = Path.home() / ".voice-to-code" / "sessions-state.json"
 

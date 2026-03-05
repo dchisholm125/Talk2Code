@@ -4,18 +4,18 @@ import torch
 from sentence_transformers import SentenceTransformer, util
 from pathlib import Path
 from typing import List, Dict, Set, Any, Tuple, Optional
-from logger import get_logger
+from core.logger import get_logger
 
 _logger = get_logger()
 
 # Deterministic import of Layer 4
 try:
-    from srm_code_nerve import ASTGraphBuilder
+    from srm.nerve import ASTGraphBuilder
 except ImportError:
     # Handle direct execution or package-style import
     import sys
     sys.path.append(str(Path(__file__).parent.resolve()))
-    from srm_code_nerve import ASTGraphBuilder
+    from srm.nerve import ASTGraphBuilder
 
 class MCTSNode:
     """A node in the MCTS tree representing a code symbol or file."""

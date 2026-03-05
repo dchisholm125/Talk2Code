@@ -6,8 +6,8 @@ from typing import Iterable
 
 from core.interfaces import DeliveryInterface, ProgressPayload
 from core.message import Message
-from llm_orchestrator import StreamOrchestrator
-from session_manager import session_manager
+from motor.orchestrator import StreamOrchestrator
+from ambient.session import session_manager
 
 
 async def handle_prompt_intent(
