@@ -38,10 +38,30 @@ class SRMContextEngine:
         node_ids = self.planner.run_mcts(prompt)
         
         # 2. Extract source and build the XML payload
-        xml_string = self.bridge.build_opencode_payload(prompt, node_ids, mode=mode)
+        xml_context = self.bridge.build_opencode_payload(node_ids, mode=mode)
         
-        _logger.info(f"[SRM Bridge] Assembled {len(node_ids)} source blocks. Payload size: {len(xml_string)} chars.")
-        return xml_string
+        # 3. Apply the conditional System Prompt
+        if mode == "plan":
+            system_prompt = (
+                "System: You are an architectural planner. Review the provided XML context. "
+                "Output a concise plan to fulfill the User Request in a Markdown block. "
+                "DO NOT use bash, read, or any file-system tools. Rely ONLY on the provided context."
+            )
+        else: # Build mode
+            system_prompt = (
+                "System: You are an autonomous execution agent. The provided XML context contains the "
+                "exact files you need to modify. You have FULL PERMISSION to use your tools (read, edit, "
+                "write, bash) to execute the User's Request. CRITICAL DIRECTIVE: You operate in zero-shot mode. "
+                "DO NOT ask the user for clarification. DO NOT ask for permission to run commands. "
+                "DO NOT stop to explain your thought process. Execute the file changes, verify them "
+                "if necessary, and terminate your run successfully."
+            )
+        
+        # 4. Final Assembly: System Prompt -> XML Context -> User Request
+        full_payload = f"{system_prompt}\n\n{xml_context}\n\nUser Request: {prompt}"
+        
+        _logger.info(f"[SRM Bridge] Assembled {len(node_ids)} source blocks. Full Payload size: {len(full_payload)} chars.")
+        return full_payload
 
     def sync_file_changes(self, modified_files: List[str]):
         """Incremental update (Synaptic Plasticity) when files are modified."""

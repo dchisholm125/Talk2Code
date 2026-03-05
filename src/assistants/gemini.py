@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import List, Optional
 from assistants.base import CodingAssistant, StreamEvent, StreamEventType
@@ -41,36 +40,23 @@ class GeminiAssistant(CodingAssistant):
             return True
         return False
 
-    def parse_line(self, line: str) -> Optional[StreamEvent]:
-        try:
-            data = json.loads(line)
-            t = data.get("type", "").lower()
+    def handle_json_event(self, data: dict) -> Optional[StreamEvent]:
+        t = data.get("type", "").lower()
 
-            if t == "message":
-                content = data.get("content", "")
-                is_delta = data.get("delta", False)
-                role = data.get("role")
-                
-                # Treat assistant delta as reasoning/thinking
-                ev_type = StreamEventType.REASONING if (role == "assistant" and is_delta) else StreamEventType.TEXT
-                return StreamEvent(ev_type, content=content)
-            
-            elif t == "tool_use":
-                return StreamEvent(StreamEventType.TOOL_USE, metadata={
-                    "name": data.get("tool_name", "tool"),
-                    "input": data.get("parameters", "")
-                })
-            
-            elif t == "tool_result":
-                res_text = data.get("output") or ""
-                if data.get("error"):
-                    err_msg = data.get("error", {}).get("message", "Unknown error")
-                    res_text += f"\nError: {err_msg}"
-                return StreamEvent(StreamEventType.TOOL_RESULT, content=res_text)
-            
-            elif t == "result":
-                return StreamEvent(StreamEventType.FINISHED)
+        if t == "message":
+            content = data.get("content", "")
+            is_delta = data.get("delta", False)
+            role = data.get("role")
+            ev_type = StreamEventType.REASONING if (role == "assistant" and is_delta) else StreamEventType.TEXT
+            return self._make_text_event(ev_type, data, ("content", "text"))
 
-        except json.JSONDecodeError:
-            return StreamEvent(StreamEventType.TEXT, content=line)
+        if t == "tool_use":
+            return self._make_tool_use_event(data, name_keys=("tool_name", "name"), input_keys=("parameters", "input"))
+
+        if t == "tool_result":
+            return self._make_tool_result_event(data, ("output", "result", "text"))
+
+        if t == "result":
+            return StreamEvent(StreamEventType.FINISHED)
+
         return None

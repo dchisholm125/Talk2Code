@@ -87,9 +87,8 @@ class BrainstormService:
         srm_context = await asyncio.to_thread(srm_engine.get_context_for_prompt, user_text, mode="plan")
         _logger.info(f"[SRM Bridge] Payload generated. Length: {len(srm_context)}")
         
-        # The ENTIRE prompt sent to the LLM should now just be:
-        system_instruction = "System: You are an architectural planner. Review the provided context. Output a concise plan to fulfill the User Request. Do NOT refuse to answer, do NOT apologize. Output your final plan in a standard Markdown code block."
-        prompt = f"{system_instruction}\n\n{srm_context}\n\nUser Request: {user_text}"
+        # The SRM engine now returns the FULL prompt (System Prompt + XML + User Request)
+        prompt = srm_context
         
         placeholder = Message(None, session_id, None, "")
         await self.event_ledger.log_event(

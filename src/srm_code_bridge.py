@@ -83,10 +83,9 @@ class SRMCodeBridge:
         # Prettify the truncated view
         return "\n".join(plan_lines).rstrip() + "\n    ..."
 
-    def build_opencode_payload(self, user_prompt: str, node_ids: List[str], mode: str = "build") -> str:
+    def build_opencode_payload(self, node_ids: List[str], mode: str = "build") -> str:
         """Constructs the XML-tagged payload for the cloud LLM."""
         payload = [
-            f"<user_request>{user_prompt}</user_request>",
             "<context_blocks>"
         ]
         
@@ -115,10 +114,10 @@ if __name__ == "__main__":
     prompt = "How do we handle incoming telegram messages?"
     
     print("--- SRM BRIDGE: PLAN MODE (Architecture) ---")
-    print(bridge.build_opencode_payload(prompt, [test_node], mode="plan"))
+    print(bridge.build_opencode_payload([test_node], mode="plan"))
     
     print("\n--- SRM BRIDGE: BUILD MODE (Implementation) ---")
-    full_payload = bridge.build_opencode_payload(prompt, [test_node], mode="build")
+    full_payload = bridge.build_opencode_payload([test_node], mode="build")
     # Truncate implementation for visibility
     lines = full_payload.splitlines()
     if len(lines) > 25:

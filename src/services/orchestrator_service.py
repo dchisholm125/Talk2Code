@@ -119,13 +119,9 @@ class OrchestratorService:
                 reason="SRM MCTS isolated relevant symbolic context",
             )
 
-            # Generate the pure prompt using only the srm context and the isolated actionable intent
-            system_prompt = (
-                "You are an expert software engineer. Analyze the specific symbolic context "
-                "provided below and implement the user's request with high precision. "
-                "Only modify the files provided in the context blocks."
-            )
-            prompt = f"{system_prompt}\n\n{srm_context}\n\nExecute this request: {actionable_intent}" + _CODING_VERIFICATION_SUFFIX
+            # SRM ENFORCEMENT: The srm_engine now returns the FULL prompt (System Prompt + XML + User Request)
+            # based on the mode provided.
+            prompt = srm_context
 
             
             session_manager.advance_window(chat_id)

@@ -1,6 +1,4 @@
-import json
 import os
-import re
 from pathlib import Path
 from typing import List, Optional
 from assistants.base import CodingAssistant, StreamEvent, StreamEventType
@@ -38,20 +36,6 @@ _DEFAULT_BUILD_MODELS = [
     "openai/gpt-5.1-codex",
     "openai/gpt-5.1-codex-max",
 ]
-
-
-def _update_env_key(env_path: Path, key: str, value: str) -> None:
-    """Write or overwrite a KEY=value line in the given .env file."""
-    text = env_path.read_text() if env_path.exists() else ""
-    pattern = re.compile(rf"^{re.escape(key)}\s*=.*$", re.MULTILINE)
-    replacement = f"{key}={value}"
-    if pattern.search(text):
-        text = pattern.sub(replacement, text)
-    else:
-        text = text.rstrip("\n") + f"\n{replacement}\n"
-    env_path.write_text(text)
-    # Also update the live process environment
-    os.environ[key] = value
 
 
 class OpenCodeAssistant(CodingAssistant):
@@ -96,7 +80,7 @@ class OpenCodeAssistant(CodingAssistant):
         
         self.current_model = self.build_models[self.build_index]  # keep build as default
         if env_path:
-            _update_env_key(env_path, "OPENCODE_PLAN_MODEL", model_id)
+            self.update_env_key(env_path, "OPENCODE_PLAN_MODEL", model_id)
 
     def set_build_model(self, model_id: str, env_path: Optional[Path] = None) -> None:
         if model_id in self.build_models:
@@ -107,7 +91,7 @@ class OpenCodeAssistant(CodingAssistant):
             
         self.current_model = model_id
         if env_path:
-            _update_env_key(env_path, "OPENCODE_BUILD_MODEL", model_id)
+            self.update_env_key(env_path, "OPENCODE_BUILD_MODEL", model_id)
 
     def rotate_model(self, agent: str = "coder") -> bool:
         if agent == "plan":
@@ -144,24 +128,16 @@ class OpenCodeAssistant(CodingAssistant):
         cmd.append(prompt)
         return cmd
 
-    def parse_line(self, line: str) -> Optional[StreamEvent]:
-        try:
-            data = json.loads(line)
-            t = data.get("type", "").lower()
-            part = data.get("part", {})
+    def handle_json_event(self, data: dict) -> Optional[StreamEvent]:
+        t = data.get("type", "").lower()
+        part = data.get("part", {})
 
-            if t == "reasoning":
-                return StreamEvent(StreamEventType.REASONING, content=part.get("text", ""))
-            elif t == "text":
-                return StreamEvent(StreamEventType.TEXT, content=part.get("text", ""))
-            elif t == "tool_use":
-                return StreamEvent(StreamEventType.TOOL_USE, metadata={
-                    "name": part.get("name", "tool"),
-                    "input": part.get("input", "")
-                })
-            elif t == "tool_result":
-                return StreamEvent(StreamEventType.TOOL_RESULT, content=part.get("output", ""))
-        except json.JSONDecodeError:
-            # Fallback for non-JSON lines (straight text from stdout/stderr)
-            return StreamEvent(StreamEventType.TEXT, content=line)
+        if t == "reasoning":
+            return self._make_text_event(StreamEventType.REASONING, part, ("text", "content"))
+        if t == "text":
+            return self._make_text_event(StreamEventType.TEXT, part, ("text", "content"))
+        if t == "tool_use":
+            return self._make_tool_use_event(part)
+        if t == "tool_result":
+            return self._make_tool_result_event(part, ("output", "result", "content"))
         return None

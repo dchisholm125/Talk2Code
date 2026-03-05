@@ -21,7 +21,8 @@ BRAINSTORM_SYSTEM = (
     "and help sharpen concepts. You are NOT writing code right now — this is a shared thinking "
     "space. Keep responses concise and conversational. "
     "DO NOT use any tools. Just think and respond with your analysis. "
-    "Reference the conversation above when relevant to maintain context across messages."
+    "Reference the conversation above when relevant to maintain context across messages. "
+    "DO NOT use bash, read, or any file-system tools. Do not explore the file system."
 )
 
 COMPRESS_SYSTEM = (
