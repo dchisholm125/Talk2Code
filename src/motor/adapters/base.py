@@ -61,8 +61,14 @@ class CodingAssistant:
         data = self._load_json_line(line)
         if data is None:
             return StreamEvent(StreamEventType.TEXT, content=line)
+        
         event = self.handle_json_event(data)
         if event is None:
+            # If it's valid JSON and contains a 'type' field, but handle_json_event 
+            # returned None, it means the adapter doesn't care about this event
+            # (e.g. step_start, step_finish). We skip it to prevent pollution.
+            if "type" in data:
+                return None
             return StreamEvent(StreamEventType.TEXT, content=line)
         return event
 

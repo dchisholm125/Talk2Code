@@ -23,26 +23,45 @@ def format_as_html(text: str) -> str:
     if not text:
         return ""
     
-    # 1. Handle code blocks (triple backticks)
-    # Be careful not to escape the tags we add
+    # 1. Escape everything first to protect Telegram from stray <, >, &
+    text = escape_html(text)
+    
+    placeholders = []
+    def add_placeholder(token):
+        idx = len(placeholders)
+        # Use a unique string WITHOUT underscores, asterisks, or backticks so it isn't mutated
+        placeholder = f"PHTALK2CODEPH{idx}PH"
+        placeholders.append(token)
+        return placeholder
+
+    # 2. Handle code blocks (triple backticks)
     def replace_code_block(match):
-        lang = match.group(1) or ""
         content = match.group(2)
-        return f"<pre><code>{escape_html(content)}</code></pre>"
+        # Content is already escaped by top-level escape_html
+        return add_placeholder(f"<pre><code>{content}</code></pre>")
     
     text = re.sub(r'```(\w*)\n(.*?)\n?```', replace_code_block, text, flags=re.DOTALL)
     
-    # 2. Handle inline code (single backticks)
-    text = re.sub(r'`([^`\n]+)`', lambda m: f"<code>{escape_html(m.group(1))}</code>", text)
+    # 3. Handle inline code (single backticks)
+    def replace_inline_code(match):
+        content = match.group(1)
+        return add_placeholder(f"<code>{content}</code>")
     
-    # 3. Handle bold (**bold**)
-    text = re.sub(r'\*\*([^*]+)\*\*', lambda m: f"<b>{escape_html(m.group(1))}</b>", text)
+    text = re.sub(r'`([^`\n]+)`', replace_inline_code, text)
     
-    # 4. Handle italic (_italic_ or *italic*)
-    text = re.sub(r'\*([^*]+)\*', lambda m: f"<i>{escape_html(m.group(1))}</i>", text)
-    text = re.sub(r'_([^_]+)_', lambda m: f"<i>{escape_html(m.group(1))}</i>", text)
+    # 4. Handle bold (**bold**) - use non-greedy
+    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text, flags=re.DOTALL)
+    
+    # 5. Handle italic (*italic* or _italic_) - use non-greedy
+    text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text, flags=re.DOTALL)
+    text = re.sub(r'_(.*?)_', r'<i>\1</i>', text, flags=re.DOTALL)
+
+    # 6. Re-insert placeholders in reverse order to ensure integrity
+    for i in range(len(placeholders) - 1, -1, -1):
+        text = text.replace(f"PHTALK2CODEPH{i}PH", placeholders[i])
 
     return text
+
 
 def format_for_telegram(raw_text: str) -> str:
     """Transform raw LLM output into Telegram-friendly HTML format."""

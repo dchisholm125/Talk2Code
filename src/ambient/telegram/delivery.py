@@ -79,11 +79,15 @@ class TelegramDeliveryAdapter(DeliveryInterface):
         parse_mode: Optional[str] = ParseMode.HTML,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Message:
+        formatted_text = text
+        if parse_mode == ParseMode.HTML:
+            formatted_text = format_for_telegram(text)
+            
         await _edit_with_retry(
             self.bot,
             chat_id=chat_id,
             message_id=message_id,
-            text=text,
+            text=formatted_text,
             parse_mode=parse_mode,
         )
         return Message(user_id=None, chat_id=chat_id, message_id=message_id, text=text, metadata=metadata or {})
